@@ -1,0 +1,92 @@
+---
+title: "readme"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Prerequisites
+
+Before installing FLfse, the following non-CRAN R packages should be installed:
+
+* stockassessment (available from https://github.com/fishfollower/SAM)
+* spict (available from https://github.com/mawp/spict/)
+* FLR packages FLCore and ggplotFL (see http://www.flr-project.org/#install)
+
+## Install FLfse
+
+FLfse can be installed with
+```R
+devtools::install_github("shfischer/FLfse/FLfse")
+```
+## Showcase functionality
+load package
+```{r}
+library(FLfse)
+```
+The package includes example data for some stocks, see
+```R
+data(package = "FLfse")
+```
+Currently, this includes North Sea cod and Irish Sea plaice.
+
+# Run stock assessments
+## SAM
+Fit SAM to North Sea cod data, with default parametrizations:
+```{R}
+library(stockassessment)
+fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx)
+```
+use the SAM assessment configuration as used by ICES WGNSSK 2017:
+```{r}
+### fit SAM model
+fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
+### check convergence
+fit$opt$convergence
+
+### The result of FLR_SAM() is an object of class "sam". 
+### All methods defined in the stockassessment package can be used on it.
+### summary table
+summary(fit)
+### plot model
+plot(fit)
+### plot catch
+catchplot(fit)
+```
+The resulting "sam" object can then be converted into an FLStock object:
+```{R}
+cod4 <- FLfse:::sam2FLStock(fit, uncertainty = TRUE)
+### plot with ggplotFL
+library(ggplotFL)
+plot(cod4)
+```
+
+Irish Sea plaice is also included, as run by ICES WGCSE 2017:
+```{R}
+ple_iris <- FLR_SAM(stk = ple7a_stk, idx = ple7a_idx, conf = ple7a_conf_sam)
+### check convergence
+ple_iris$opt$convergence
+### results
+summary(ple_iris)
+plot(ple_iris)
+```
+
+## SPiCT
+Another assessment method implemented is the Surplus Production in Continuous Time (SPiCT) model (Pedersen & Berg, 2017).
+
+```{R}
+library(spict)
+### fit SPiCT to Irish Sea plaice
+fit <- FLR_SPiCT(stk = ple7a_stk, idx = ple7a_idx)
+### check results
+fit
+plot(fit)
+
+### pass additional configuration, set time step to 1 per year
+conf <- list(dteuler = 1)
+fit2 <- FLR_SPiCT(stk = ple7a_stk, idx = ple7a_idx, conf = conf)
+fit2
+```
+

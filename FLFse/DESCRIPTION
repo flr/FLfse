@@ -1,0 +1,25 @@
+Package: FLfse
+Type: Package
+Title: Fisheries Sampling Evaluation In FLR
+Version: 0.0.0.9000
+Authors@R: c(
+  person("Simon H.", "Fischer", email = "simon.fischer@cefas.co.uk",
+    role = c("aut", "cre")),
+  person("Gwladys", "Lambert", role = "aut"),
+  person("Sven", "Kupschus", role = "aut"))
+Maintainer: Simon Fischer <simon.fischer@cefas.co.uk>
+Description: Fisheries Sampling Evaluation in FLR.
+    Evaluate the effect of fisheries sampling design on various stock assessment
+    methods. Currently it includes XSA (FLXSA), SAM, SPiCT.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Imports:
+    methods
+Depends:
+    FLCore
+Suggests: 
+    spict (>= 1.2.1),
+    stockassessment (>= 0.5.4),
+    mgcv
+RoxygenNote: 6.0.1
