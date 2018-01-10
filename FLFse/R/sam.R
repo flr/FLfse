@@ -223,7 +223,7 @@ FLR_SAM_run <- function(stk, idx, conf = NULL) {
 #' fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
 #'
 #' # fit SAM to Irish Sea plaice
-#' fit <- FLR_SAM(stk = )
+#' fit <- FLR_SAM(stk = ple7a_stk, idx = ple7a_idx, conf = ple7a_conf_sam)
 #'
 #' @export
 
@@ -232,6 +232,7 @@ setGeneric("FLR_SAM", function(stk, idx, conf = NULL) {
 })
 
 ### stk = FLStock, idx = FLIndices
+#' @rdname FLR_SAM
 setMethod(f = "FLR_SAM",
           signature = signature(stk = "FLStock", idx = "FLIndices"),
           definition = function(stk, idx, conf = NULL) {
@@ -240,15 +241,16 @@ setMethod(f = "FLR_SAM",
 
 })
 ### stk = FLStock, idx = FLIndex
+#' @rdname FLR_SAM
 setMethod(f = "FLR_SAM",
           signature = signature(stk = "FLStock", idx = "FLIndex"),
-          definition = function(stk, idx, conf = conf) {
+          definition = function(stk, idx, conf = NULL) {
 
   ### coerce FLIndex into FLIndices
   idx <- FLIndices(idx)
 
   ### run SPiCT
-  FLR_SAM_run(stk = stk, idx = idx, conf = NULL)
+  FLR_SAM_run(stk = stk, idx = idx, conf = conf)
 
 })
 

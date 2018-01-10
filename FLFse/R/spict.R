@@ -49,7 +49,7 @@ setGeneric("FLR_SPiCT", function(stk, idx, conf = NULL) {
 })
 
 ### stk = FLStock, idx = FLIndices
-#' @export
+#' @rdname FLR_SPiCT
 setMethod(f = "FLR_SPiCT",
           signature = signature(stk = "FLStock", idx = "FLIndices"),
           definition = function(stk, idx, conf = NULL) {
@@ -58,7 +58,7 @@ setMethod(f = "FLR_SPiCT",
 
           })
 ### stk = FLStock, idx = FLIndex
-#' @export
+#' @rdname FLR_SPiCT
 setMethod(f = "FLR_SPiCT",
           signature = signature(stk = "FLStock", idx = "FLIndex"),
           definition = function(stk, idx, conf = NULL) {

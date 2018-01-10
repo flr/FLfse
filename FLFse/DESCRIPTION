@@ -17,7 +17,7 @@ LazyData: true
 Imports:
     methods
 Depends:
-    FLCore
+    FLCore (>= 2.6.5.9021)
 Suggests: 
     spict (>= 1.2.1),
     stockassessment (>= 0.5.4),
