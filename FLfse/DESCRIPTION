@@ -21,5 +21,6 @@ Depends:
 Suggests: 
     spict (>= 1.2.1),
     stockassessment (>= 0.5.4),
-    mgcv
+    mgcv,
+    FLXSA (>= 2.6.0)
 RoxygenNote: 6.0.1
