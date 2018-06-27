@@ -19,7 +19,8 @@ matrix2FLQuant <- function(input) {
 
 ### load FLR objects and run SAM
 ### function not exported, use FLR_SAM instead
-FLR_SAM_run <- function(stk, idx, conf = NULL) {
+FLR_SAM_run <- function(stk, idx, conf = NULL,
+                        force_list_output = FALSE) {
 
   ### check if required package is available
   if (!requireNamespace("stockassessment", quietly = TRUE)) {
@@ -28,137 +29,187 @@ FLR_SAM_run <- function(stk, idx, conf = NULL) {
          call. = FALSE)
   }
 
-  ### calculate landings fraction
-  lf <- landings.n(stk) / catch.n(stk)
-  ### assume only landings if NA
-  lf[is.na(lf) | is.infinite(lf)] <- 1
+  ### check iter dimension and increase if necessary
+  lengths <- c(dims(stk)$iter, sapply(lapply(idx, dim), "[", 6))
+  if (length(unique(lengths)) > 1) {
 
-  ### do some sanity checks ...
-  ### fill empty landings/discards weights
-
-  ### create SAM input objects
-  dat_lst <- list(residual.fleet = catch.n(stk),
-                  prop.mature = mat(stk),
-                  stock.mean.weight = stock.wt(stk),
-                  catch.mean.weight = catch.wt(stk),
-                  dis.mean.weight = discards.wt(stk),
-                  land.mean.weight = landings.wt(stk),
-                  natural.mortality = m(stk),
-                  prop.f = harvest.spwn(stk),
-                  prop.m = m.spwn(stk),
-                  land.frac = lf)
-
-  ### reduce dimensions, keep only age & year
-  dat_lst <- lapply(dat_lst, function(x) {
-    x[, drop = TRUE]
-  })
-  ### transpose matrix (required for SAM)
-  dat_lst <- lapply(dat_lst, t)
-  ### remove trailing years which contain only NAs
-  ### otherwise SAM will complain
-  dat_lst <- lapply(dat_lst, function(x) {
-    ### find rows/years with NAs
-    years_NA <- apply(x, 1, function(y) {
-      all(is.na(y))
-    })
-    ### check if last year contains only NAs, if yes, find length of sequence
-    if (isTRUE(c(tail(years_NA, 1), use.names = FALSE))) {
-      ### length of TRUE/FALSE sequences
-      seq_lngth <- rle(years_NA)
-      ### length of last TRUE sequence
-      lngth_NA <- as.vector(tail(seq_lngth$lengths, 1))
-      ### find positions for corresponding years
-      pos_remove <- which(rownames(x) == tail(rownames(x), lngth_NA))
-      x <- x[-pos_remove, ]
-    }
-    return(x)
-  })
-
-  ### extract indices
-  dat_idx <- lapply(idx, function(x){
-    ### extract index slot
-    tmp <- index(x)
-    ### get dims
-    tmp_dim <- dim(tmp)
-    tmp_dimnames <- dimnames(tmp)
-    ### coerce into array, drop all dimensions apart from age/year
-    tmp <- array(data = tmp, dim = tmp_dim[1:2], dimnames = tmp_dimnames[1:2])
-    ### transpose
-    tmp <- t(tmp)
-    ### change age description for ssb/biomass surveys
-    if (dim(tmp)[2] == 1) {
-      if (isTRUE(!is.numeric(dimnames(tmp)[[2]])) | ### non numeric ages
-                 is.na(dimnames(tmp)[[2]]) | ### NA as age
-                 dimnames(tmp)[[2]] == -1) {
-        dimnames(tmp)[[2]] <- -1 ### recognized by SAM as SSB index
-      }
+    ### check if iterations can be propagated, i.e. if 1 or >1
+    if (any(lengths[-which(lengths == max(lengths))] > 1)) {
+      stop("incompatible number of iterations in stock and index!")
     }
 
-    ### add survey timing as attribute
-    attr(tmp, "time") <- as.vector(range(x)[c("startf", "endf")])
-    return(tmp)
-  })
+    ### propagate stock
+    if (lengths[1] < max(lengths)) {
+      stk <- propagate(stk, max(lengths), fill.iter = TRUE)
+    }
 
-  ### add indices to input list
-  dat_lst$surveys <- dat_idx
+    ### propagate index/indices
+    if (any(lengths[-1] < max(lengths))) {
+      idx <- lapply(idx, propagate, iter = max(lengths), fill.iter = TRUE)
+    }
 
-  ### create SAM input object
-  dat_sam <- do.call(stockassessment::setup.sam.data, dat_lst)
-
-  ### create default configuration
-  conf_sam <- stockassessment::defcon(dat_sam)
-  ### fbar range
-  if (all(!is.na(range(stk)[c("minfbar", "maxfbar")]))) {
-    conf_sam$fbarRange <- range(stk)[c("minfbar", "maxfbar")]
   }
 
-  ### insert configuration, if supplied to function
-  if (!is.null(conf)) {
+  ### go through iterations
+  res_iter <- lapply(seq(dims(stk)$iter), function(i) {
 
-    ### find slots that can be used
-    conf_names <- intersect(names(conf), names(conf_sam))
+    ### subset stock and index to current iter
+    stk_i <- FLCore::iter(stk, i)
+    idx_i <- lapply(idx, iter, i)
 
-    ### go through slot names
-    if (length(conf_names) > 0) {
+    ### calculate landings fraction
+    lf <- landings.n(stk_i) / catch.n(stk_i)
+    ### assume only landings if NA
+    lf[is.na(lf) | is.infinite(lf)] <- 1
 
-      for(i in conf_names) {
+    ### do some sanity checks ...
+    ### fill empty landings/discards weights
 
-        ### workaround for keyParScaledYA
-        ### default 0x0 matrix, needs to extended
-        if (i == "keyParScaledYA") {
+    ### create SAM input objects
+    dat_lst <- list(residual.fleet = catch.n(stk_i),
+                    prop.mature = mat(stk_i),
+                    stock.mean.weight = stock.wt(stk_i),
+                    catch.mean.weight = catch.wt(stk_i),
+                    dis.mean.weight = discards.wt(stk_i),
+                    land.mean.weight = landings.wt(stk_i),
+                    natural.mortality = m(stk_i),
+                    prop.f = harvest.spwn(stk_i),
+                    prop.m = m.spwn(stk_i),
+                    land.frac = lf)
 
-          conf_sam[[i]] <- conf[[i]]
+    ### reduce dimensions, keep only age & year
+    dat_lst <- lapply(dat_lst, function(x) {
+      x[, drop = TRUE]
+    })
+    ### transpose matrix (required for SAM)
+    dat_lst <- lapply(dat_lst, t)
+    ### remove trailing years which contain only NAs
+    ### otherwise SAM will complain
+    dat_lst <- lapply(dat_lst, function(x) {
+      ### find rows/years with NAs
+      years_NA <- apply(x, 1, function(y) {
+        all(is.na(y))
+      })
+      ### check if last year contains only NAs, if yes, find length of sequence
+      if (isTRUE(c(tail(years_NA, 1), use.names = FALSE))) {
+        ### length of TRUE/FALSE sequences
+        seq_lngth <- rle(years_NA)
+        ### length of last TRUE sequence
+        lngth_NA <- as.vector(tail(seq_lngth$lengths, 1))
+        ### find positions for corresponding years
+        pos_remove <- which(rownames(x) == tail(rownames(x), lngth_NA))
+        x <- x[-pos_remove, ]
+      }
+      return(x)
+    })
 
-          ### otherwise enter only values
-        } else {
+    ### extract indices
+    dat_idx <- lapply(idx_i, function(x){
+      ### extract index slot
+      tmp <- index(x)
+      ### get dims
+      tmp_dim <- dim(tmp)
+      tmp_dimnames <- dimnames(tmp)
+      ### coerce into array, drop all dimensions apart from age/year
+      tmp <- array(data = tmp, dim = tmp_dim[1:2], dimnames = tmp_dimnames[1:2])
+      ### transpose
+      tmp <- t(tmp)
+      ### change age description for ssb/biomass surveys
+      if (dim(tmp)[2] == 1) {
+        if (isTRUE(!is.numeric(dimnames(tmp)[[2]])) | ### non numeric ages
+                   is.na(dimnames(tmp)[[2]]) | ### NA as age
+                   dimnames(tmp)[[2]] == -1) {
+          dimnames(tmp)[[2]] <- -1 ### recognized by SAM as SSB index
+        }
+      }
 
-          ### position where values supplied (i.e. not NA)
-          pos <- NULL ### reset from previous iteration
-          pos <- which(!is.na(conf[[i]]))
-          ### insert values
-          conf_sam[[i]][pos] <- conf[[i]][pos]
+      ### add survey timing as attribute
+      attr(tmp, "time") <- as.vector(range(x)[c("startf", "endf")])
+      return(tmp)
+    })
+
+    ### add indices to input list
+    dat_lst$surveys <- dat_idx
+
+    ### create SAM input object
+    dat_sam <- do.call(stockassessment::setup.sam.data, dat_lst)
+
+    ### create default configuration
+    conf_sam <- stockassessment::defcon(dat_sam)
+
+    ### fbar range
+    if (all(!is.na(range(stk_i)[c("minfbar", "maxfbar")]))) {
+      conf_sam$fbarRange <- range(stk_i)[c("minfbar", "maxfbar")]
+    }
+
+    ### insert configuration, if supplied to function
+    if (!is.null(conf)) {
+
+      ### find slots that can be used
+      conf_names <- intersect(names(conf), names(conf_sam))
+
+      ### go through slot names
+      if (length(conf_names) > 0) {
+
+        for (i in conf_names) {
+
+          ### workaround for keyParScaledYA
+          ### default 0x0 matrix, needs to extended
+          if (i == "keyParScaledYA") {
+
+            conf_sam[[i]] <- conf[[i]]
+
+            ### otherwise enter only values
+          } else {
+
+            ### position where values supplied (i.e. not NA)
+            pos <- NULL ### reset from previous iteration
+            pos <- which(!is.na(conf[[i]]))
+            ### insert values
+            conf_sam[[i]][pos] <- conf[[i]][pos]
+
+          }
 
         }
 
       }
-
     }
+
+    ### define parameters for SAM
+    par <- stockassessment::defpar(dat_sam, conf_sam)
+
+    ### run SAM
+    sam_msg <- capture.output(fit <- stockassessment::sam.fit(dat_sam, conf_sam,
+                                                              par))
+
+    ### save screen message(s) as attribute
+    attr(x = fit, which = "messages") <- sam_msg
+
+    ### return
+    return(fit)
+
+  })
+  ### set class to "sam_list"
+  class(res_iter) <- "sam_list"
+
+  ### if only 1 iteration, return remove list structure
+  if (length(res_iter) == 1 & !isTRUE(force_list_output)) {
+
+    return(res_iter[[1]])
+
+  ### otherwise, return full list
+  } else {
+
+    return(res_iter)
+
   }
 
-  ### define parameters for SAM
-  par <- stockassessment::defpar(dat_sam, conf_sam)
-
-  ### run SAM
-  sam_msg <- capture.output(fit <- stockassessment::sam.fit(dat_sam, conf_sam,
-                                                            par))
-
-  ### save screen message(s) as attribute
-  attr(x = fit, which = "messages") <- sam_msg
-
-  ### return
-  return(fit)
-
 }
+
+### ------------------------------------------------------------------------ ###
+### Run SAM with FLR objects ####
+### ------------------------------------------------------------------------ ###
+
 
 #' Run SAM with FLR objects.
 #'
@@ -260,13 +311,18 @@ setMethod(f = "FLR_SAM",
 ### ------------------------------------------------------------------------ ###
 
 ### function for converting sam into FLStock
-sam2FLStock <- function(object, uncertainty = FALSE, conf_level = 95, ...) {
+sam2FLStock <- function(object, ### sam object
+                        uncertainty = FALSE, ### confidence intervals?
+                        conf_level = 95, ### confidence interval level in %
+                        catch_estimate = FALSE, ### use catch input or
+                                                ### model estimates
+                        ...) {
 
   ### check class type of input
   if (!isTRUE("sam" %in% class(object))) stop("object has to be class sam")
 
   ### calculate SD multiplier for uncertainty range
-  if (isTRUE(uncertainty)) SD_mult <- stats::qnorm(0.5+conf_level/200)
+  if (isTRUE(uncertainty)) SD_mult <- stats::qnorm(0.5 + conf_level/200)
 
   ### get dimensions
   years <- object$data$years
@@ -294,7 +350,7 @@ sam2FLStock <- function(object, uncertainty = FALSE, conf_level = 95, ...) {
   ### harvest @ age
   harvest <- exp(object$pl$logF)
   ### duplicate linked ages
-  harvest <- harvest[object$conf$keyLogFsta[1,]+1, ]
+  harvest <- harvest[object$conf$keyLogFsta[1,] + 1, ]
   n_ages <- dim(harvest)[1]
   n_yrs <- dim(harvest)[2]
   harvest(stk)[1:n_ages, 1:n_yrs] <- harvest
@@ -351,43 +407,50 @@ sam2FLStock <- function(object, uncertainty = FALSE, conf_level = 95, ...) {
   dat_catch <- merge(x = dat_catch, y = dat_full, all = TRUE)
   dat_catch <- dat_catch[order(dat_catch$year, dat_catch$age), ] ### sort
 
-  ### insert estimates
-  catch.n(stk)[ac(unique(dat_catch$age)), ac(unique(dat_catch$year))] <-
-    dat_catch$estimate
-  ### correct catch numbers if a catch multiplier was estimated
-  if (length(object$pl$logScale) > 0) {
-    ### catch multipliers
-    catch_mult <- object$pl$logScale
-    ### replicate multipliers as defined in configuration
-    catch_mult <- catch_mult[(object$conf$keyParScaledYA + 1)]
-    ### format into matrix
-    catch_mult <- matrix(data = catch_mult, ncol = object$conf$noScaledYears,
-                         nrow = length(object$conf$minAge:object$conf$maxAge), byrow = TRUE)
-    ### exponentiate
-    catch_mult <- exp(catch_mult)
-    ### coerce into FLQuant
-    catch_qnt <- qnt ### dummy object
-    catch_qnt[, ac(object$conf$keyScaledYears)] <- catch_mult
-    ### replace NA with 1
-    catch_qnt[is.na(catch_qnt)] <- 1
-    ### multiply catch numbers
-    catch.n(stk) <- catch.n(stk) * catch_qnt
+  ### insert catch: estimates or input values
+  if (!isTRUE(catch_estimate)) {
+
+    catch.n(stk)[ac(unique(dat_catch$age)), ac(unique(dat_catch$year))] <-
+      dat_catch$value
+
+    } else {
+    catch.n(stk)[ac(unique(dat_catch$age)), ac(unique(dat_catch$year))] <-
+      dat_catch$estimate
+    ### correct catch numbers if a catch multiplier was estimated
+    if (length(object$pl$logScale) > 0) {
+      ### catch multipliers
+      catch_mult <- object$pl$logScale
+      ### replicate multipliers as defined in configuration
+      catch_mult <- catch_mult[(object$conf$keyParScaledYA + 1)]
+      ### format into matrix
+      catch_mult <- matrix(data = catch_mult, ncol = object$conf$noScaledYears,
+                           nrow = length(object$conf$minAge:object$conf$maxAge),
+                           byrow = TRUE)
+      ### exponentiate
+      catch_mult <- exp(catch_mult)
+      ### coerce into FLQuant
+      catch_qnt <- qnt ### dummy object
+      catch_qnt[, ac(object$conf$keyScaledYears)] <- catch_mult
+      ### replace NA with 1
+      catch_qnt[is.na(catch_qnt)] <- 1
+      ### multiply catch numbers
+      catch.n(stk) <- catch.n(stk) * catch_qnt
+
+      ### catch biomass
+      catch <- quantSums(qnt)
+      catch[, 1:n_yrs] <- exp(object$sdrep$value[names(object$sdrep$value) ==
+                                                   "logCatch"])
+      catch(stk) <- catch
+
+    }
+
   }
-  ### save observations as attribute
-  catch.n_obs <- qnt
-  catch.n_obs[ac(unique(dat_catch$age)), ac(unique(dat_catch$year))] <-
-    dat_catch$value
-  attr(catch.n(stk), "observations") <- catch.n_obs
-  ### catch biomass
-  catch <- quantSums(qnt)
-  catch[, 1:n_yrs] <- exp(object$sdrep$value[names(object$sdrep$value) == "logCatch"])
-  catch(stk) <- catch
-  ### total catch observations
-  attr(catch(stk), "observations") <- quantSums(catch.wt(stk) *
-                                                  attr(catch.n(stk), "observations"))
+
+  ### total catch
+  catch(stk) <- computeCatch(stk)
 
   ### catch range
-  if (isTRUE(uncertainty)) {
+  if (isTRUE(uncertainty) & isTRUE(catch_estimate)) {
     catch_sd <- quantSums(qnt)
     catch_sd[, 1:n_yrs] <- object$sdrep$sd[names(object$sdrep$value) == "logCatch"]
     attr(catch(stk), "low") <- exp(log(catch(stk)) - catch_sd * SD_mult)
@@ -433,7 +496,7 @@ sam2FLStock <- function(object, uncertainty = FALSE, conf_level = 95, ...) {
   discards.wt(stk)[1:n_ages, 1:n_yrs] <- discards.wt
   ### total discards
   discards(stk) <- computeDiscards(stk)
-  ### discardrange
+  ### discard range
   if (isTRUE(uncertainty)) {
     ### calculate range
     ### assume that landing fraction is the same for estimate, low and high
@@ -480,155 +543,31 @@ sam2FLStock <- function(object, uncertainty = FALSE, conf_level = 95, ...) {
 
 }
 
-# ### function for converting sam into FLStock
-# sam2FLStock <- function(object, uncertainty = FALSE, ...) {
-#
-#   ### get dimensions
-#   years <- object$data$years
-#   ages <- object$conf$minAge:object$conf$maxAge
-#
-#   ### create FLQuant dummy
-#   qnt <- FLQuant(NA, dimnames = list(age = ages, year = years))
-#   ### create FLStock
-#   stk <- FLStock(qnt)
-#
-#   ### fishing mortality
-#   stk_lst <- list(harvest = faytable(object))
-#
-#
-#   harvest <- matrix2FLQuant(faytable(object))
-#   harvest(stk)[] <- harvest
-#
-#   #exp(object$pl$logF)
-#
-#   ### stock numbers @ age
-#   stock.n <- exp(object$pl$logN)
-#   n_ages <- dim(stock.n)[1]
-#   n_yrs <- dim(stock.n)[2]
-#   stock.n(stk)[1:n_ages, 1:n_yrs] <- stock.n
-#
-#   ### harvest @ age
-#   harvest <- exp(object$pl$logF)
-#   ### duplicate linked ages
-#   harvest <- harvest[object$conf$keyLogFsta[1,]+1, ]
-#   n_ages <- dim(harvest)[1]
-#   n_yrs <- dim(harvest)[2]
-#   harvest(stk)[1:n_ages, 1:n_yrs] <- harvest
-#   units(harvest(stk)) <- "f"
-#
-#   ### ---------------------------------------------------------------------- ###
-#   ### input data
-#
-#   ### stock
-#   ### stock weight @ age
-#   stock.wt <- t(object$data$stockMeanWeight)
-#   n_ages <- dim(stock.wt)[1]
-#   n_yrs <- dim(stock.wt)[2]
-#   stock.wt(stk)[1:n_ages, 1:n_yrs] <- stock.wt
-#   ### stock biomass
-#   stock(stk) <- computeStock(stk)
-#
-#   ### catch
-#   ### catch weight @ age
-#   catch.wt <- t(object$data$catchMeanWeight)
-#   n_ages <- dim(catch.wt)[1]
-#   n_yrs <- dim(catch.wt)[2]
-#   catch.wt(stk)[1:n_ages, 1:n_yrs] <- catch.wt
-#   ### catch numbers @ age
-#   catch_fleets <- which(object$data$fleetTypes == 0)
-#   ### extract observations
-#   dat_catch <- cbind(object$data$aux, value = exp(object$data$logobs))
-#   dat_catch <- dat_catch[dat_catch[, "fleet"] == catch_fleets, ]
-#   ### sum up catch numbers over all commercial fleets
-#   dat_catch <- aggregate(value ~ age + year, dat_catch,  FUN = sum)
-#   ### insert
-#   catch.n(stk)[ac(unique(dat_catch$age)), ac(unique(dat_catch$year))] <- dat_catch$value
-#   ### catch biomass
-#   catch(stk) <- computeCatch(stk)
-#
-#   ### landings
-#   ### calculate with landings fraction of total catch
-#   lfrac <- t(object$data$landFrac)
-#   n_ages <- dim(lfrac)[1]
-#   n_yrs <- dim(lfrac)[2]
-#   lfrac_qnt <- landings.n(stk) ### FLQuant template
-#   lfrac_qnt[1:n_ages, 1:n_yrs] <- lfrac
-#   ### calculate landings numbers @ age
-#   landings.n(stk) <- catch.n(stk) * lfrac_qnt
-#   ### landings weights @ age
-#   landings.wt <- t(object$data$landMeanWeight)
-#   n_ages <- dim(landings.wt)[1]
-#   n_yrs <- dim(landings.wt)[2]
-#   landings.wt(stk)[1:n_ages, 1:n_yrs] <- landings.wt
-#   ### total landings
-#   landings(stk) <- computeLandings(stk)
-#
-#   ### discards
-#   ### calculate discards number @ age
-#   discards.n(stk) <- catch.n(stk) * (1 - lfrac_qnt)
-#   ### discards weights @ age
-#   discards.wt <- t(object$data$disMeanWeight)
-#   n_ages <- dim(discards.wt)[1]
-#   n_yrs <- dim(discards.wt)[2]
-#   discards.wt(stk)[1:n_ages, 1:n_yrs] <- discards.wt
-#   ### total landings
-#   discards(stk) <- computeDiscards(stk)
-#
-#   ### natural mortality
-#   m <- t(object$data$natMor)
-#   n_ages <- dim(m)[1]
-#   n_yrs <- dim(m)[2]
-#   m(stk)[1:n_ages, 1:n_yrs] <- m
-#
-#   ### maturity ogive
-#   mat <- t(object$data$propMat)
-#   n_ages <- dim(mat)[1]
-#   n_yrs <- dim(mat)[2]
-#   mat(stk)[1:n_ages, 1:n_yrs] <- mat
-#
-#   ### proportion of F before spawning
-#   harvest.spwn <- t(object$data$propF)
-#   n_ages <- dim(harvest.spwn)[1]
-#   n_yrs <- dim(harvest.spwn)[2]
-#   harvest.spwn(stk)[1:n_ages, 1:n_yrs] <- harvest.spwn
-#
-#   ### proportion of M before spawning
-#   m.spwn <- t(object$data$propM)
-#   n_ages <- dim(m.spwn)[1]
-#   n_yrs <- dim(m.spwn)[2]
-#   m.spwn(stk)[1:n_ages, 1:n_yrs] <- m.spwn
-#
-#   ### set description
-#   desc(stk) <- "FLStock created from SAM model fit"
-#
-#   ### set range
-#   ### plusgroup?
-#   range(stk)["plusgroup"] <- ifelse(isTRUE(object$conf$maxAgePlusGroup == 1),
-#                                     object$conf$maxAge, NA)
-#   ### fbar range
-#   range(stk)[c("minfbar", "maxfbar")] <- object$conf$fbarRange
-#
-#   ### iters
-#   ### input data      1
-#   ### model estimate  2
-#   ### sd              3
-#
-#   ### input & model estimate
-#   ### catch, catch.n, landings, landings.n, discards, discards.n
-#
-#   ### input only
-#   ### m, mat, catch.wt, landings.wt, discards.wt, stock.wt, harvest.spwn,
-#   ### m.spwn
-#
-#   ### what if the input stock has > 1 iteration?
-#
-#   ### estimate only
-#   ### harvest, stock, stock.n
-#
-#   ### return FLStock
-#   return(stk)
-#
-# }
+### function for converting sam_list into FLStock
+sam_list2FLStock <- function(object, uncertainty = FALSE, conf_level = 95, ...) {
+
+  ### check class type of input
+  if (!isTRUE("sam_list" %in% class(object))) {
+    stop("object has to be class sam_list")
+  }
+
+  ### convert all iterations into FLStock objects
+  stk_iter <- lapply(object, sam2FLStock, uncertainty = uncertainty,
+                     conf_level = conf_level, ...)
+  ### expand iter dimension
+  stk <- propagate(stk_iter[[1]], iter = length(stk_iter), fill.iter = FALSE)
+
+  ### insert values for all iterations
+  for (i in seq_along(stk_iter)[-1]) {
+
+    FLCore::iter(stk, i) <- stk_iter[[i]]
+
+  }
+
+  ### return FLStock including iterations
+  return(stk)
+
+}
 
 #showMethods("FLStock")
 #showMethods(class = "sam")
@@ -638,3 +577,7 @@ setOldClass("sam")
 setMethod(f = "FLStock", signature = signature(object = "sam"),
           definition = sam2FLStock)
 
+### for "sam_list", i.e. list of "sam" objects
+setOldClass("sam_list")
+setMethod(f = "FLStock", signature = signature(object = "sam_list"),
+          definition = sam_list2FLStock)

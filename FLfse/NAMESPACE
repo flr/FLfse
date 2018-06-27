@@ -2,6 +2,7 @@
 
 export(FLR_SAM)
 export(FLR_SPiCT)
+export(SAM2FLStock)
 import(FLCore)
 import(methods)
 importFrom(utils,capture.output)

@@ -7,11 +7,13 @@
 \alias{FLR_SAM,FLStock,FLIndex-method}
 \title{Run SAM with FLR objects.}
 \usage{
-FLR_SAM(stk, idx, conf = NULL)
+FLR_SAM(stk, idx, conf = NULL, DoParallel = FALSE)
 
-\S4method{FLR_SAM}{FLStock,FLIndices}(stk, idx, conf = NULL)
+\S4method{FLR_SAM}{FLStock,FLIndices}(stk, idx, conf = NULL,
+  DoParallel = FALSE)
 
-\S4method{FLR_SAM}{FLStock,FLIndex}(stk, idx, conf = NULL)
+\S4method{FLR_SAM}{FLStock,FLIndex}(stk, idx, conf = NULL,
+  DoParallel = FALSE)
 }
 \arguments{
 \item{stk}{Object of class \linkS4class{FLStock} with stock and fishery data.}
@@ -19,10 +21,17 @@ FLR_SAM(stk, idx, conf = NULL)
 \item{idx}{Object of class \linkS4class{FLIndices} or \linkS4class{FLIndex}
 object with survey index time series.}
 
-\item{conf}{Optional configurations passed to SAM. Should be a list.}
+\item{conf}{Optional configurations passed to SAM. Defaults to \code{NULL}.
+If provided, should be a list.}
+
+\item{DoParallel}{Optional, defaults to \code{FALSE}. If set to \code{TRUE},
+will perform iterations of stock in parallel. See Details below for
+description.}
 }
 \value{
-An object of class \code{spictcls} with the model results.
+An object of class \code{sam} (for single iteration) or
+  \code{sam_list} (list of \code{sam} objects for multiple iterations) with
+  the model results.
 }
 \description{
 This function runs a SAM assessment using FLR objects as input. Stock and
@@ -66,6 +75,17 @@ additional configurations are passed to \code{FLR_SAM}, they will replace
 the default configuration. For details about possible configurations and
 format see '\code{help("defcon", package = "stockassessment")} and
 \url{https://github.com/fishfollower/SAM}.
+
+The function can handle input objects with multiple iterations (\code{iter}
+dimension in \code{stk} and \code{idx}). If multiple iterations are provided
+for \code{stk} but not for \code{idx}, \code{idx} will be inflated, and vice
+ versa.
+If the assessment fails for some iterations, the error messages are return
+for these iterations.
+If argument \code{DoParallel} is set to \code{TRUE}, the individual
+iterations are processed in parallel. This uses parallel computing provided
+by the package \code{DoParallel}. The parallel workers need to be set up
+and registered before calling the function. See \code{?DoParallel}.
 }
 \section{Warning}{
 
