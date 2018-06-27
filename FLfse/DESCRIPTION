@@ -17,10 +17,12 @@ LazyData: true
 Imports:
     methods
 Depends:
-    FLCore (>= 2.6.5.9021)
+    FLCore (>= 2.6.5),
+    foreach
 Suggests: 
     spict (>= 1.2.1),
     stockassessment (>= 0.5.4),
     mgcv,
-    FLXSA (>= 2.6.0)
+    FLXSA (>= 2.6.0),
+    DoParallel
 RoxygenNote: 6.0.1
