@@ -212,6 +212,7 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 
 }
 
+
 ### ------------------------------------------------------------------------ ###
 ### Run SAM with FLR objects ####
 ### ------------------------------------------------------------------------ ###
@@ -331,165 +332,6 @@ setMethod(f = "FLR_SAM",
 ### ------------------------------------------------------------------------ ###
 ### convert sam object into FLStock ####
 ### ------------------------------------------------------------------------ ###
-
-#showMethods("FLStock")
-#showMethods(class = "sam")
-### register "sam" class as formally defined class
-setOldClass("sam")
-setOldClass("sam_list")
-
-#' Coerce SAM output into \code{FLStock} object
-#'
-#' This function takes the output from running the SAM stockassessment and
-#' converts them into an \code{FLStock} object.
-#'
-#' If an \code{FLStock} is provided as \code{stk} argument, then only the
-#' following slots are updated: \code{stock}, \code{stock.n} & \code{harvest},
-#' and, if requested by \code{catch_estimate = TRUE}, \code{catch},
-#' \code{catch.n}, \code{landings}, \code{landings.n}, \code{discards},
-#' \code{discards.n} with model estimates. If the dimensions
-#' (years, iterations) differ between the SAM results and the provided stock
-#' template, the returned \code{FLStock} is expanded.
-#'
-#'
-#' @param object Object of class \linkS4class{sam} with the results from a
-#'   SAM stock assessment run. Alternatively, object of class \code{sam_list},
-#'   i.e. a list of \code{sam} objects.
-#' @param stk Optional. Object of class \linkS4class{FLStock}, to which the
-#'   assessment results are added.
-#' @param uncertainty If set to \code{TRUE}, the estimated uncertainty from
-#' SAM will be added as attribute.
-#' @param conf_level Confidence level used when uncertainty is returned.
-#'   Defaults to 95 (percent).
-#' @param catch_estimate If set to \code{TRUE}, the catch estimated by SAM will
-#' be returned instead of the model input.
-#'
-#' @return An object of class \code{FLStock}.
-#'
-#' @examples
-#' # fit SAM to North Sea cod
-#' fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
-#'
-#' # coerce the output into FLStock
-#' stk <- SAM2FLStock(fit)
-#'
-#' # get catch estimates from model
-#' stk <- SAM2FLStock(fit, catch_estimate = TRUE)
-#'
-#' @export
-
-setGeneric("SAM2FLStock", function(object, stk, uncertainty = FALSE,
-                                   conf_level = 95, catch_estimate = FALSE) {
-  standardGeneric("SAM2FLStock")
-})
-
-### object = sam, stk = missing
-#' @rdname SAM2FLStock
-setMethod(f = "SAM2FLStock",
-          signature = signature(object = "sam", stk = "missing"),
-          definition = function(object, stk, uncertainty = FALSE,
-                                conf_level = 95, catch_estimate = FALSE) {
-
-  sam_to_FLStock(object = object, stk = stk, uncertainty = uncertainty,
-                 conf_level = conf_level, catch_estimate = catch_estimate)
-
-})
-
-### object = sam_list, stk = missing
-#' @rdname SAM2FLStock
-setMethod(f = "SAM2FLStock",
-          signature = signature(object = "sam_list", stk = "missing"),
-          definition = function(object, stk, uncertainty = FALSE,
-                                conf_level = 95, catch_estimate = FALSE) {
-
-  sam_list_to_FLStock(object = object, stk = stk, uncertainty = uncertainty,
-                      conf_level = conf_level, catch_estimate = catch_estimate)
-
-})
-
-### object = sam, stk = FLStock
-#' @rdname SAM2FLStock
-setMethod(f = "SAM2FLStock",
-          signature = signature(object = "sam", stk = "FLStock"),
-          definition = function(object, stk, uncertainty = FALSE,
-                                conf_level = 95, catch_estimate = FALSE) {
-
-  ### coerce SAM into FLStock
-  stk_new <- sam_to_FLStock(object = object, stk = stk,
-                            uncertainty = uncertainty,
-                            conf_level = conf_level,
-                            catch_estimate = catch_estimate)
-
-  ### adapt dimensions
-  stks <- adapt_dims(stk, stk_new, fill.iter = TRUE)
-  ### extract from list
-  stk <- stks[[1]]
-  stk_new <- stks[[2]]
-
-  ### insert values
-  stock(stk) <- stock(stk_new)
-  stock.n(stk) <- stock.n(stk_new)
-  harvest(stk) <- harvest(stk_new)
-
-  ### update catch, if requested
-  if (isTRUE(catch_estimate)) {
-
-    catch(stk) <- catch(stk_new)
-    catch.n(stk) <- catch.n(stk_new)
-    landings(stk) <- landings(stk_new)
-    landings.n(stk) <- landings.n(stk_new)
-    discards(stk) <- discards(stk_new)
-    discards.n(stk) <- discards.n(stk_new)
-
-  }
-
-  ### return input stock, updated wit requested data
-  return(stk)
-
-})
-
-### object = sam_list, stk = FLStock
-#' @rdname SAM2FLStock
-setMethod(f = "SAM2FLStock",
-          signature = signature(object = "sam_list", stk = "FLStock"),
-          definition = function(object, stk, uncertainty = FALSE,
-                                conf_level = 95, catch_estimate = FALSE) {
-
-  ### coerce SAM into FLStock
-  stk_new <- sam_list_to_FLStock(object = object, stk = stk,
-                                 uncertainty = uncertainty,
-                                 conf_level = conf_level,
-                                 catch_estimate = catch_estimate)
-
-  ### adapt dimensions
-  stks <- adapt_dims(stk, stk_new, fill.iter = TRUE)
-  ### extract from list
-  stk <- stks[[1]]
-  stk_new <- stks[[2]]
-
-  ### insert values
-  stock(stk) <- stock(stk_new)
-  stock.n(stk) <- stock.n(stk_new)
-  harvest(stk) <- harvest(stk_new)
-
-  ### update catch, if requested
-  if (isTRUE(catch_estimate)) {
-
-    catch(stk) <- catch(stk_new)
-    catch.n(stk) <- catch.n(stk_new)
-    landings(stk) <- landings(stk_new)
-    landings.n(stk) <- landings.n(stk_new)
-    discards(stk) <- discards(stk_new)
-    discards.n(stk) <- discards.n(stk_new)
-
-  }
-
-  ### return input stock, updated wit requested data
-  return(stk)
-
-})
-
-
 
 ### function for converting sam into FLStock
 sam_to_FLStock <- function(object, ### sam object
@@ -780,3 +622,163 @@ sam_list_to_FLStock <- function(object, uncertainty = FALSE, conf_level = 95,
 
 }
 
+### ------------------------------------------------------------------------ ###
+### definition of methods for converting SAM results into FLStock ####
+### ------------------------------------------------------------------------ ###
+
+#showMethods("FLStock")
+#showMethods(class = "sam")
+### register "sam" class as formally defined class
+setOldClass("sam")
+setOldClass("sam_list")
+
+#' Coerce SAM output into \code{FLStock} object
+#'
+#' This function takes the output from running the SAM stockassessment and
+#' converts them into an \code{FLStock} object.
+#'
+#' If an \code{FLStock} is provided as \code{stk} argument, then only the
+#' following slots are updated: \code{stock}, \code{stock.n} & \code{harvest},
+#' and, if requested by \code{catch_estimate = TRUE}, \code{catch},
+#' \code{catch.n}, \code{landings}, \code{landings.n}, \code{discards},
+#' \code{discards.n} with model estimates. If the dimensions
+#' (years, iterations) differ between the SAM results and the provided stock
+#' template, the returned \code{FLStock} is expanded.
+#'
+#'
+#' @param object Object of class \linkS4class{sam} with the results from a
+#'   SAM stock assessment run. Alternatively, object of class \code{sam_list},
+#'   i.e. a list of \code{sam} objects.
+#' @param stk Optional. Object of class \linkS4class{FLStock}, to which the
+#'   assessment results are added.
+#' @param uncertainty If set to \code{TRUE}, the estimated uncertainty from
+#' SAM will be added as attribute.
+#' @param conf_level Confidence level used when uncertainty is returned.
+#'   Defaults to 95 (percent).
+#' @param catch_estimate If set to \code{TRUE}, the catch estimated by SAM will
+#' be returned instead of the model input.
+#'
+#' @return An object of class \code{FLStock}.
+#'
+#' @examples
+#' # fit SAM to North Sea cod
+#' fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
+#'
+#' # coerce the output into FLStock
+#' stk <- SAM2FLStock(fit)
+#'
+#' # get catch estimates from model
+#' stk <- SAM2FLStock(fit, catch_estimate = TRUE)
+#'
+#' @export
+
+setGeneric("SAM2FLStock", function(object, stk, uncertainty = FALSE,
+                                   conf_level = 95, catch_estimate = FALSE) {
+  standardGeneric("SAM2FLStock")
+})
+
+### object = sam, stk = missing
+#' @rdname SAM2FLStock
+setMethod(f = "SAM2FLStock",
+          signature = signature(object = "sam", stk = "missing"),
+          definition = function(object, stk, uncertainty = FALSE,
+                                conf_level = 95, catch_estimate = FALSE) {
+
+    sam_to_FLStock(object = object, stk = stk, uncertainty = uncertainty,
+                   conf_level = conf_level, catch_estimate = catch_estimate)
+
+  })
+
+### object = sam_list, stk = missing
+#' @rdname SAM2FLStock
+setMethod(f = "SAM2FLStock",
+          signature = signature(object = "sam_list", stk = "missing"),
+          definition = function(object, stk, uncertainty = FALSE,
+                                conf_level = 95, catch_estimate = FALSE) {
+
+    sam_list_to_FLStock(object = object, stk = stk, uncertainty = uncertainty,
+                        conf_level = conf_level, catch_estimate = catch_estimate)
+
+  })
+
+### object = sam, stk = FLStock
+#' @rdname SAM2FLStock
+setMethod(f = "SAM2FLStock",
+          signature = signature(object = "sam", stk = "FLStock"),
+          definition = function(object, stk, uncertainty = FALSE,
+                                conf_level = 95, catch_estimate = FALSE) {
+
+  ### coerce SAM into FLStock
+  stk_new <- sam_to_FLStock(object = object, stk = stk,
+                            uncertainty = uncertainty,
+                            conf_level = conf_level,
+                            catch_estimate = catch_estimate)
+
+  ### adapt dimensions
+  stks <- adapt_dims(stk, stk_new, fill.iter = TRUE)
+  ### extract from list
+  stk <- stks[[1]]
+  stk_new <- stks[[2]]
+
+  ### insert values
+  stock(stk) <- stock(stk_new)
+  stock.n(stk) <- stock.n(stk_new)
+  harvest(stk) <- harvest(stk_new)
+
+  ### update catch, if requested
+  if (isTRUE(catch_estimate)) {
+
+    catch(stk) <- catch(stk_new)
+    catch.n(stk) <- catch.n(stk_new)
+    landings(stk) <- landings(stk_new)
+    landings.n(stk) <- landings.n(stk_new)
+    discards(stk) <- discards(stk_new)
+    discards.n(stk) <- discards.n(stk_new)
+
+  }
+
+  ### return input stock, updated wit requested data
+  return(stk)
+
+})
+
+### object = sam_list, stk = FLStock
+#' @rdname SAM2FLStock
+setMethod(f = "SAM2FLStock",
+          signature = signature(object = "sam_list", stk = "FLStock"),
+          definition = function(object, stk, uncertainty = FALSE,
+                                conf_level = 95, catch_estimate = FALSE) {
+
+  ### coerce SAM into FLStock
+  stk_new <- sam_list_to_FLStock(object = object, stk = stk,
+                                 uncertainty = uncertainty,
+                                 conf_level = conf_level,
+                                 catch_estimate = catch_estimate)
+
+  ### adapt dimensions
+  stks <- adapt_dims(stk, stk_new, fill.iter = TRUE)
+  ### extract from list
+  stk <- stks[[1]]
+  stk_new <- stks[[2]]
+
+  ### insert values
+  stock(stk) <- stock(stk_new)
+  stock.n(stk) <- stock.n(stk_new)
+  harvest(stk) <- harvest(stk_new)
+
+  ### update catch, if requested
+  if (isTRUE(catch_estimate)) {
+
+    catch(stk) <- catch(stk_new)
+    catch.n(stk) <- catch.n(stk_new)
+    landings(stk) <- landings(stk_new)
+    landings.n(stk) <- landings.n(stk_new)
+    discards(stk) <- discards(stk_new)
+    discards.n(stk) <- discards.n(stk_new)
+
+  }
+
+  ### return input stock, updated wit requested data
+  return(stk)
+
+})
