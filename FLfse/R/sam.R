@@ -21,7 +21,9 @@ matrix2FLQuant <- function(input) {
 ### function not exported, use FLR_SAM instead
 FLR_SAM_run <- function(stk, idx, conf = NULL,
                         force_list_output = FALSE,
-                        DoParallel = FALSE ### compute iterations in parallel
+                        DoParallel = FALSE, ### compute iterations in parallel
+                        newtonsteps = 3,
+                        ...
                         ) {
 
   ### check if required package is available
@@ -108,6 +110,12 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
       }
       return(x)
     })
+    ### trim years of land.frac to dimension of catch
+    ### (after removing trailing NAs)
+    ### otherwise, weird things happen when a forecast is performed...
+    if (any(dim(dat_lst$residual.fleet) != dim(dat_lst$land.frac))) {
+      dat_lst$land.frac <- dat_lst$land.frac[seq(nrow(dat_lst$residual.fleet)),]
+    }
 
     ### extract indices
     dat_idx <- lapply(idx_i, function(x){
@@ -185,8 +193,10 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
     par <- stockassessment::defpar(dat_sam, conf_sam)
 
     ### run SAM
-    sam_msg <- capture.output(fit <- stockassessment::sam.fit(dat_sam, conf_sam,
-                                                              par))
+    sam_msg <- capture.output(
+      fit <- stockassessment::sam.fit(data = dat_sam, conf = conf_sam,
+                                      parameters = par,
+                                      newtonsteps = newtonsteps))
 
     ### save screen message(s) as attribute
     attr(x = fit, which = "messages") <- sam_msg
@@ -284,6 +294,8 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 #' @param DoParallel Optional, defaults to \code{FALSE}. If set to \code{TRUE},
 #'   will perform iterations of stock in parallel. See Details below for
 #'   description.
+#' @param ... Additional arguments passed to \code{sam.fit()}, e.g.
+#'   \code{newtonsteps}
 #'
 #' @return An object of class \code{sam} (for single iteration) or
 #'   \code{sam_list} (list of \code{sam} objects for multiple iterations) with
@@ -301,7 +313,7 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 #'
 #' @export
 
-setGeneric("FLR_SAM", function(stk, idx, conf = NULL, DoParallel = FALSE) {
+setGeneric("FLR_SAM", function(stk, idx, conf = NULL, DoParallel = FALSE, ...) {
   standardGeneric("FLR_SAM")
 })
 
@@ -309,22 +321,22 @@ setGeneric("FLR_SAM", function(stk, idx, conf = NULL, DoParallel = FALSE) {
 #' @rdname FLR_SAM
 setMethod(f = "FLR_SAM",
           signature = signature(stk = "FLStock", idx = "FLIndices"),
-          definition = function(stk, idx, conf = NULL, DoParallel = FALSE) {
+          definition = function(stk, idx, conf = NULL, DoParallel = FALSE, ...) {
 
-  FLR_SAM_run(stk = stk, idx = idx, conf = conf, DoParallel = DoParallel)
+  FLR_SAM_run(stk = stk, idx = idx, conf = conf, DoParallel = DoParallel, ...)
 
 })
 ### stk = FLStock, idx = FLIndex
 #' @rdname FLR_SAM
 setMethod(f = "FLR_SAM",
           signature = signature(stk = "FLStock", idx = "FLIndex"),
-          definition = function(stk, idx, conf = NULL, DoParallel = FALSE) {
+          definition = function(stk, idx, conf = NULL, DoParallel = FALSE, ...) {
 
   ### coerce FLIndex into FLIndices
   idx <- FLIndices(idx)
 
   ### run SPiCT
-  FLR_SAM_run(stk = stk, idx = idx, conf = conf, DoParallel = DoParallel)
+  FLR_SAM_run(stk = stk, idx = idx, conf = conf, DoParallel = DoParallel, ...)
 
 })
 
@@ -524,8 +536,8 @@ sam_to_FLStock <- function(object, ### sam object
   if (isTRUE(uncertainty)) {
     ### calculate range
     ### assume that landing fraction is the same for estimate, low and high
-    attr(discards(stk), "low") <- attr(catch(stk), "low") * (1-lfrac_qnt_sum)
-    attr(discards(stk), "high") <- attr(catch(stk), "high") * (1-lfrac_qnt_sum)
+    attr(discards(stk), "low") <- attr(catch(stk), "low") * (1 - lfrac_qnt_sum)
+    attr(discards(stk), "high") <- attr(catch(stk), "high") * (1 - lfrac_qnt_sum)
   }
 
   ### natural mortality
