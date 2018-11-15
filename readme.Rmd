@@ -18,7 +18,7 @@ Before installing FLfse, the following non-CRAN R packages should be installed:
 ## Install FLfse
 
 FLfse can be installed with
-```R
+```{R, eval = FALSE}
 devtools::install_github("shfischer/FLfse/FLfse")
 ```
 ## Showcase functionality
@@ -27,7 +27,7 @@ load package
 library(FLfse)
 ```
 The package includes example data for some stocks, see
-```R
+```{R}
 data(package = "FLfse")
 ```
 Currently, this includes North Sea cod and Irish Sea plaice.
@@ -36,10 +36,9 @@ Currently, this includes North Sea cod and Irish Sea plaice.
 ## SAM
 Fit SAM to North Sea cod data, with default parametrizations:
 ```{R}
-library(stockassessment)
 fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx)
 ```
-use the SAM assessment configuration as used by ICES WGNSSK 2017:
+use the SAM assessment configuration as used by ICES WGNSSK 2018:
 ```{r}
 ### fit SAM model
 fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
@@ -57,14 +56,14 @@ catchplot(fit)
 ```
 The resulting "sam" object can then be converted into an FLStock object:
 ```{R}
-cod4 <- FLfse:::sam2FLStock(fit, uncertainty = TRUE)
+cod4 <- SAM2FLStock(fit, cod4_stk)
 ### plot with ggplotFL
 library(ggplotFL)
 plot(cod4)
 ```
 
 Irish Sea plaice is also included, as run by ICES WGCSE 2017:
-```{R}
+```{R, eval = FALSE}
 ple_iris <- FLR_SAM(stk = ple7a_stk, idx = ple7a_idx, conf = ple7a_conf_sam)
 ### check convergence
 ple_iris$opt$convergence

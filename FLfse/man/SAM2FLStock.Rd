@@ -15,14 +15,14 @@ SAM2FLStock(object, stk, uncertainty = FALSE, conf_level = 95,
 \S4method{SAM2FLStock}{sam,missing}(object, stk, uncertainty = FALSE,
   conf_level = 95, catch_estimate = FALSE)
 
-\S4method{SAM2FLStock}{sam_list,missing}(object, stk, uncertainty = FALSE,
-  conf_level = 95, catch_estimate = FALSE)
+\S4method{SAM2FLStock}{sam_list,missing}(object, stk,
+  uncertainty = FALSE, conf_level = 95, catch_estimate = FALSE)
 
 \S4method{SAM2FLStock}{sam,FLStock}(object, stk, uncertainty = FALSE,
   conf_level = 95, catch_estimate = FALSE)
 
-\S4method{SAM2FLStock}{sam_list,FLStock}(object, stk, uncertainty = FALSE,
-  conf_level = 95, catch_estimate = FALSE)
+\S4method{SAM2FLStock}{sam_list,FLStock}(object, stk,
+  uncertainty = FALSE, conf_level = 95, catch_estimate = FALSE)
 }
 \arguments{
 \item{object}{Object of class \linkS4class{sam} with the results from a

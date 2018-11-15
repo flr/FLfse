@@ -7,13 +7,13 @@
 \alias{FLR_SAM,FLStock,FLIndex-method}
 \title{Run SAM with FLR objects.}
 \usage{
-FLR_SAM(stk, idx, conf = NULL, DoParallel = FALSE)
+FLR_SAM(stk, idx, conf = NULL, DoParallel = FALSE, ...)
 
 \S4method{FLR_SAM}{FLStock,FLIndices}(stk, idx, conf = NULL,
-  DoParallel = FALSE)
+  DoParallel = FALSE, ...)
 
 \S4method{FLR_SAM}{FLStock,FLIndex}(stk, idx, conf = NULL,
-  DoParallel = FALSE)
+  DoParallel = FALSE, ...)
 }
 \arguments{
 \item{stk}{Object of class \linkS4class{FLStock} with stock and fishery data.}
@@ -27,6 +27,9 @@ If provided, should be a list.}
 \item{DoParallel}{Optional, defaults to \code{FALSE}. If set to \code{TRUE},
 will perform iterations of stock in parallel. See Details below for
 description.}
+
+\item{...}{Additional arguments passed to \code{sam.fit()}, e.g.
+\code{newtonsteps}}
 }
 \value{
 An object of class \code{sam} (for single iteration) or
