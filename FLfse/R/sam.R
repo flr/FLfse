@@ -22,8 +22,8 @@ matrix2FLQuant <- function(input) {
 FLR_SAM_run <- function(stk, idx, conf = NULL,
                         force_list_output = FALSE,
                         DoParallel = FALSE, ### compute iterations in parallel
-                        newtonsteps = 3,
-                        ...
+                        #newtonsteps = 3,
+                        ... ### passed to sam.fit()
                         ) {
 
   ### check if required package is available
@@ -196,7 +196,7 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
     sam_msg <- capture.output(
       fit <- stockassessment::sam.fit(data = dat_sam, conf = conf_sam,
                                       parameters = par,
-                                      newtonsteps = newtonsteps))
+                                      ...))
 
     ### save screen message(s) as attribute
     attr(x = fit, which = "messages") <- sam_msg
