@@ -351,6 +351,8 @@ sam_to_FLStock <- function(object, ### sam object
                         conf_level = 95, ### confidence interval level in %
                         catch_estimate = FALSE, ### use catch input or
                                                 ### model estimates
+                        correct_catch = FALSE, ### "correct" catch with
+                                               ### estimated multiplier
                         ...) {
 
   ### check class type of input
@@ -446,39 +448,60 @@ sam_to_FLStock <- function(object, ### sam object
   ### insert catch: estimates or input values
   if (!isTRUE(catch_estimate)) {
 
+    ### use input data
     catch.n(stk)[ac(unique(dat_catch$age)), ac(unique(dat_catch$year))] <-
       dat_catch$value
 
-    } else {
+  } else {
+
+    ### use value estimated by SAM
     catch.n(stk)[ac(unique(dat_catch$age)), ac(unique(dat_catch$year))] <-
       dat_catch$estimate
-    ### correct catch numbers if a catch multiplier was estimated
-    if (length(object$pl$logScale) > 0) {
-      ### catch multipliers
-      catch_mult <- object$pl$logScale
-      ### replicate multipliers as defined in configuration
-      catch_mult <- catch_mult[(object$conf$keyParScaledYA + 1)]
-      ### format into matrix
-      catch_mult <- matrix(data = catch_mult, ncol = object$conf$noScaledYears,
-                           nrow = length(object$conf$minAge:object$conf$maxAge),
-                           byrow = TRUE)
-      ### exponentiate
-      catch_mult <- exp(catch_mult)
-      ### coerce into FLQuant
-      catch_qnt <- qnt ### dummy object
-      catch_qnt[, ac(object$conf$keyScaledYears)] <- catch_mult
-      ### replace NA with 1
-      catch_qnt[is.na(catch_qnt)] <- 1
-      ### multiply catch numbers
-      catch.n(stk) <- catch.n(stk) * catch_qnt
 
-      ### catch biomass
-      catch <- quantSums(qnt)
-      catch[, 1:n_yrs] <- exp(object$sdrep$value[names(object$sdrep$value) ==
-                                                   "logCatch"])
-      catch(stk) <- catch
+  }
 
+  ### correct catch numbers if a catch multiplier was estimated
+  if (isTRUE(correct_catch)) {
+
+    ### warn if no catch multiplier available
+    if (!(length(object$pl$logScale) > 1)) {
+      warning("catch correction requested but no catch multiplier estimated")
     }
+
+    ### get catch multiplier dimensions
+    ages_mult <- object$conf$minAge:fit$conf$maxAge
+    yrs_mult <- object$conf$keyScaledYears
+    ### create catch multiplier FLQuant
+    catch_mult_data <- FLQuant(
+      matrix(data = object$pl$logScale[(object$conf$keyParScaledYA + 1)],
+             ncol = object$conf$noScaledYears,
+             nrow = length(object$conf$minAge:object$conf$maxAge),
+             byrow = TRUE),
+      dimnames = list(year = object$conf$keyScaledYears,
+                      age = object$conf$minAge:object$conf$maxAge))
+    ### model values in log scale, exponentiate
+    catch_mult_data <- exp(catch_mult_data)
+    ### for simpler calculations, expand dimensions for stock
+    catch_mult <- catch.n(stk) %=% 1
+    catch_mult[ac(ages_mult), ac(yrs_mult)] <- catch_mult_data
+
+    ### correct catch.n
+    catch.n(stk) <- catch.n(stk) * catch_mult
+    # ### split into landings and discards, based on landing fraction
+    # ### done later
+    # land_frac <- landings.n(stk) / catch.n(stk)
+    # landings.n(stk) <- catch.n(stk) * land_frac
+    # discards.n(stk) <- catch.n(stk) * (1 - land_frac)
+    # ### update stock
+    # catch(stk) <- computeCatch(stk)
+    # landings(stk) <- computeLandings(stk)
+    # discards(stk)<- computeDiscards(stk)
+
+    # ### catch biomass
+    # catch <- quantSums(qnt)
+    # catch[, 1:n_yrs] <- exp(object$sdrep$value[names(object$sdrep$value) ==
+    #                                              "logCatch"])
+    # catch(stk) <- catch
 
   }
 
@@ -669,6 +692,8 @@ setOldClass("sam_list")
 #'   Defaults to 95 (percent).
 #' @param catch_estimate If set to \code{TRUE}, the catch estimated by SAM will
 #' be returned instead of the model input.
+#' @param correct_catch If set to \code{TRUE}, returned catch are correct by
+#'   catch multiplier estimated by SAM.
 #'
 #' @return An object of class \code{FLStock}.
 #'
@@ -685,7 +710,8 @@ setOldClass("sam_list")
 #' @export
 
 setGeneric("SAM2FLStock", function(object, stk, uncertainty = FALSE,
-                                   conf_level = 95, catch_estimate = FALSE) {
+                                   conf_level = 95, catch_estimate = FALSE,
+                                   correct_catch = FALSE) {
   standardGeneric("SAM2FLStock")
 })
 
@@ -694,10 +720,12 @@ setGeneric("SAM2FLStock", function(object, stk, uncertainty = FALSE,
 setMethod(f = "SAM2FLStock",
           signature = signature(object = "sam", stk = "missing"),
           definition = function(object, stk, uncertainty = FALSE,
-                                conf_level = 95, catch_estimate = FALSE) {
+                                conf_level = 95, catch_estimate = FALSE,
+                                correct_catch = FALSE) {
 
     sam_to_FLStock(object = object, stk = stk, uncertainty = uncertainty,
-                   conf_level = conf_level, catch_estimate = catch_estimate)
+                   conf_level = conf_level, catch_estimate = catch_estimate,
+                   correct_catch = correct_catch)
 
   })
 
@@ -706,10 +734,13 @@ setMethod(f = "SAM2FLStock",
 setMethod(f = "SAM2FLStock",
           signature = signature(object = "sam_list", stk = "missing"),
           definition = function(object, stk, uncertainty = FALSE,
-                                conf_level = 95, catch_estimate = FALSE) {
+                                conf_level = 95, catch_estimate = FALSE,
+                                correct_catch = FALSE) {
 
     sam_list_to_FLStock(object = object, stk = stk, uncertainty = uncertainty,
-                        conf_level = conf_level, catch_estimate = catch_estimate)
+                        conf_level = conf_level,
+                        catch_estimate = catch_estimate,
+                        correct_catch = correct_catch)
 
   })
 
@@ -718,13 +749,15 @@ setMethod(f = "SAM2FLStock",
 setMethod(f = "SAM2FLStock",
           signature = signature(object = "sam", stk = "FLStock"),
           definition = function(object, stk, uncertainty = FALSE,
-                                conf_level = 95, catch_estimate = FALSE) {
+                                conf_level = 95, catch_estimate = FALSE,
+                                correct_catch = FALSE) {
 
   ### coerce SAM into FLStock
   stk_new <- sam_to_FLStock(object = object, stk = stk,
                             uncertainty = uncertainty,
                             conf_level = conf_level,
-                            catch_estimate = catch_estimate)
+                            catch_estimate = catch_estimate,
+                            correct_catch = correct_catch)
 
   ### adapt dimensions
   stks <- adapt_dims(stk, stk_new, fill.iter = TRUE)
@@ -738,7 +771,7 @@ setMethod(f = "SAM2FLStock",
   harvest(stk) <- harvest(stk_new)
 
   ### update catch, if requested
-  if (isTRUE(catch_estimate)) {
+  if (isTRUE(catch_estimate) | isTRUE(correct_catch)) {
 
     catch(stk) <- catch(stk_new)
     catch.n(stk) <- catch.n(stk_new)
@@ -759,13 +792,15 @@ setMethod(f = "SAM2FLStock",
 setMethod(f = "SAM2FLStock",
           signature = signature(object = "sam_list", stk = "FLStock"),
           definition = function(object, stk, uncertainty = FALSE,
-                                conf_level = 95, catch_estimate = FALSE) {
+                                conf_level = 95, catch_estimate = FALSE,
+                                correct_catch = FALSE) {
 
   ### coerce SAM into FLStock
   stk_new <- sam_list_to_FLStock(object = object, stk = stk,
                                  uncertainty = uncertainty,
                                  conf_level = conf_level,
-                                 catch_estimate = catch_estimate)
+                                 catch_estimate = catch_estimate,
+                                 correct_catch = correct_catch)
 
   ### adapt dimensions
   stks <- adapt_dims(stk, stk_new, fill.iter = TRUE)
@@ -779,7 +814,7 @@ setMethod(f = "SAM2FLStock",
   harvest(stk) <- harvest(stk_new)
 
   ### update catch, if requested
-  if (isTRUE(catch_estimate)) {
+  if (isTRUE(catch_estimate) | isTRUE(correct_catch)) {
 
     catch(stk) <- catch(stk_new)
     catch.n(stk) <- catch.n(stk_new)
