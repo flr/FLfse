@@ -25,4 +25,4 @@ Suggests:
     mgcv,
     FLXSA (>= 2.6.0),
     DoParallel
-RoxygenNote: 6.1.0
+RoxygenNote: 6.1.1

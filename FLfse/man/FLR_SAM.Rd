@@ -7,13 +7,14 @@
 \alias{FLR_SAM,FLStock,FLIndex-method}
 \title{Run SAM with FLR objects.}
 \usage{
-FLR_SAM(stk, idx, conf = NULL, DoParallel = FALSE, ...)
+FLR_SAM(stk, idx, conf = NULL, par_ini = NULL, DoParallel = FALSE,
+  ...)
 
 \S4method{FLR_SAM}{FLStock,FLIndices}(stk, idx, conf = NULL,
-  DoParallel = FALSE, ...)
+  par_ini = NULL, DoParallel = FALSE, ...)
 
 \S4method{FLR_SAM}{FLStock,FLIndex}(stk, idx, conf = NULL,
-  DoParallel = FALSE, ...)
+  par_ini = NULL, DoParallel = FALSE, ...)
 }
 \arguments{
 \item{stk}{Object of class \linkS4class{FLStock} with stock and fishery data.}
@@ -23,6 +24,9 @@ object with survey index time series.}
 
 \item{conf}{Optional configurations passed to SAM. Defaults to \code{NULL}.
 If provided, should be a list.}
+
+\item{par_ini}{Optional starting parameters for SAM. See details for more
+information.}
 
 \item{DoParallel}{Optional, defaults to \code{FALSE}. If set to \code{TRUE},
 will perform iterations of stock in parallel. See Details below for
@@ -83,12 +87,21 @@ The function can handle input objects with multiple iterations (\code{iter}
 dimension in \code{stk} and \code{idx}). If multiple iterations are provided
 for \code{stk} but not for \code{idx}, \code{idx} will be inflated, and vice
  versa.
-If the assessment fails for some iterations, the error messages are return
+If the assessment fails for some iterations, the error messages are returned
 for these iterations.
 If argument \code{DoParallel} is set to \code{TRUE}, the individual
 iterations are processed in parallel. This uses parallel computing provided
 by the package \code{DoParallel}. The parallel workers need to be set up
 and registered before calling the function. See \code{?DoParallel}.
+
+Argument \code{par_ini} allows the provision of initial parameter values for
+SAM and can speed up the model. Either a single set of parameters can be
+supplied and they are recycled if neccessary. Alternatively, a list of
+initial parameters can be supplied, one for each iteration of the
+stock/index. If the dimensions of initial values for numbers/fishing
+mortality at age differ from the data, redundant years are automatically
+removed and if years are missing, the values from the last provided year are
+recycled.
 }
 \section{Warning}{
 

@@ -22,7 +22,7 @@ matrix2FLQuant <- function(input) {
 FLR_SAM_run <- function(stk, idx, conf = NULL,
                         force_list_output = FALSE,
                         DoParallel = FALSE, ### compute iterations in parallel
-                        #newtonsteps = 3,
+                        par_ini = NULL, ### initial parameter values
                         ... ### passed to sam.fit()
                         ) {
 
@@ -54,6 +54,16 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 
   }
 
+  ### number of iterations
+  it <- dim(stk)[6]
+
+  ### check dimensions of supplied parameters and propagate if neccessary
+  if (length(par_ini) != it) {
+
+    par_ini <- rep(list(par_ini), it)
+
+  }
+
   ### set parallel or serial processing of iterations
   `%do_tmp%` <- ifelse(isTRUE(DoParallel), `%dopar%`, `%do%`)
 
@@ -64,6 +74,7 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
     ### subset stock and index to current iter
     stk_i <- FLCore::iter(stk, i)
     idx_i <- lapply(idx, FLCore::iter, i)
+    par_i <- par_ini[[i]]
 
     ### calculate landings fraction
     lf <- landings.n(stk_i) / catch.n(stk_i)
@@ -189,13 +200,47 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
       }
     }
 
-    ### define parameters for SAM
-    par <- stockassessment::defpar(dat_sam, conf_sam)
+    ### define parameters for SAM if none are passed through
+    if (is.null(par_i)) {
+
+      par_i <- stockassessment::defpar(dat_sam, conf_sam)
+
+    ### check dimensions of parameters and adapt if neccessary
+    } else {
+
+      ### use stock weight to get year dimensions of data
+      n_yrs <- dim(dat_sam$stockMeanWeight)[1]
+      ### same for initial parameter values (data transposed ...)
+      n_yrs_ini <- dim(par_i$logF)[2]
+
+      ### if dimensions differ,
+      ### remove redudant years at end of time series if more values provided
+      ### or replicate values from last year if values missing
+
+      ### adapt stock numbers and fishing mortality initial values
+      if (n_yrs_ini < n_yrs) {
+
+        ### find missing years
+        n_missing <- n_yrs - n_yrs_ini
+        ### extend
+        par_i$logF <- par_i$logF[, c(seq(n_yrs_ini),
+                                     rep(tail(n_yrs_ini, n_missing)))]
+        par_i$logN <- par_i$logN[, c(seq(n_yrs_ini),
+                                     rep(tail(n_yrs_ini, n_missing)))]
+
+      } else if (n_yrs_ini > n_yrs) {
+
+        par_i$logF <- par_i$logF[, seq(n_yrs)]
+        par_i$logN <- par_i$logN[, seq(n_yrs)]
+
+      }
+
+    }
 
     ### run SAM
     sam_msg <- capture.output(
       fit <- stockassessment::sam.fit(data = dat_sam, conf = conf_sam,
-                                      parameters = par,
+                                      parameters = par_i,
                                       ...))
 
     ### save screen message(s) as attribute
@@ -274,12 +319,21 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 #' dimension in \code{stk} and \code{idx}). If multiple iterations are provided
 #' for \code{stk} but not for \code{idx}, \code{idx} will be inflated, and vice
 #'  versa.
-#' If the assessment fails for some iterations, the error messages are return
+#' If the assessment fails for some iterations, the error messages are returned
 #' for these iterations.
 #' If argument \code{DoParallel} is set to \code{TRUE}, the individual
 #' iterations are processed in parallel. This uses parallel computing provided
 #' by the package \code{DoParallel}. The parallel workers need to be set up
 #' and registered before calling the function. See \code{?DoParallel}.
+#'
+#' Argument \code{par_ini} allows the provision of initial parameter values for
+#' SAM and can speed up the model. Either a single set of parameters can be
+#' supplied and they are recycled if neccessary. Alternatively, a list of
+#' initial parameters can be supplied, one for each iteration of the
+#' stock/index. If the dimensions of initial values for numbers/fishing
+#' mortality at age differ from the data, redundant years are automatically
+#' removed and if years are missing, the values from the last provided year are
+#' recycled.
 #'
 #' @section Warning:
 #' This methods requires the \code{stockassessment} package and all its
@@ -291,6 +345,8 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 #'   object with survey index time series.
 #' @param conf Optional configurations passed to SAM. Defaults to \code{NULL}.
 #'   If provided, should be a list.
+#' @param  par_ini Optional starting parameters for SAM. See details for more
+#'   information.
 #' @param DoParallel Optional, defaults to \code{FALSE}. If set to \code{TRUE},
 #'   will perform iterations of stock in parallel. See Details below for
 #'   description.
@@ -313,7 +369,8 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 #'
 #' @export
 
-setGeneric("FLR_SAM", function(stk, idx, conf = NULL, DoParallel = FALSE, ...) {
+setGeneric("FLR_SAM", function(stk, idx, conf = NULL, par_ini = NULL,
+                               DoParallel = FALSE, ...) {
   standardGeneric("FLR_SAM")
 })
 
@@ -321,22 +378,26 @@ setGeneric("FLR_SAM", function(stk, idx, conf = NULL, DoParallel = FALSE, ...) {
 #' @rdname FLR_SAM
 setMethod(f = "FLR_SAM",
           signature = signature(stk = "FLStock", idx = "FLIndices"),
-          definition = function(stk, idx, conf = NULL, DoParallel = FALSE, ...) {
+          definition = function(stk, idx, conf = NULL, par_ini = NULL,
+                                DoParallel = FALSE, ...) {
 
-  FLR_SAM_run(stk = stk, idx = idx, conf = conf, DoParallel = DoParallel, ...)
+  FLR_SAM_run(stk = stk, idx = idx, conf = conf, DoParallel = DoParallel,
+              par_ini = par_ini, ...)
 
 })
 ### stk = FLStock, idx = FLIndex
 #' @rdname FLR_SAM
 setMethod(f = "FLR_SAM",
           signature = signature(stk = "FLStock", idx = "FLIndex"),
-          definition = function(stk, idx, conf = NULL, DoParallel = FALSE, ...) {
+          definition = function(stk, idx, conf = NULL, par_ini = NULL,
+                                DoParallel = FALSE, ...) {
 
   ### coerce FLIndex into FLIndices
   idx <- FLIndices(idx)
 
   ### run SPiCT
-  FLR_SAM_run(stk = stk, idx = idx, conf = conf, DoParallel = DoParallel, ...)
+  FLR_SAM_run(stk = stk, idx = idx, conf = conf, DoParallel = DoParallel,
+              par_ini = NULL, ...)
 
 })
 

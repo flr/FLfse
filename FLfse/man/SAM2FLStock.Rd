@@ -10,19 +10,21 @@
 \title{Coerce SAM output into \code{FLStock} object}
 \usage{
 SAM2FLStock(object, stk, uncertainty = FALSE, conf_level = 95,
-  catch_estimate = FALSE)
+  catch_estimate = FALSE, correct_catch = FALSE)
 
 \S4method{SAM2FLStock}{sam,missing}(object, stk, uncertainty = FALSE,
-  conf_level = 95, catch_estimate = FALSE)
+  conf_level = 95, catch_estimate = FALSE, correct_catch = FALSE)
 
 \S4method{SAM2FLStock}{sam_list,missing}(object, stk,
-  uncertainty = FALSE, conf_level = 95, catch_estimate = FALSE)
+  uncertainty = FALSE, conf_level = 95, catch_estimate = FALSE,
+  correct_catch = FALSE)
 
 \S4method{SAM2FLStock}{sam,FLStock}(object, stk, uncertainty = FALSE,
-  conf_level = 95, catch_estimate = FALSE)
+  conf_level = 95, catch_estimate = FALSE, correct_catch = FALSE)
 
 \S4method{SAM2FLStock}{sam_list,FLStock}(object, stk,
-  uncertainty = FALSE, conf_level = 95, catch_estimate = FALSE)
+  uncertainty = FALSE, conf_level = 95, catch_estimate = FALSE,
+  correct_catch = FALSE)
 }
 \arguments{
 \item{object}{Object of class \linkS4class{sam} with the results from a
@@ -40,6 +42,9 @@ Defaults to 95 (percent).}
 
 \item{catch_estimate}{If set to \code{TRUE}, the catch estimated by SAM will
 be returned instead of the model input.}
+
+\item{correct_catch}{If set to \code{TRUE}, returned catch are correct by
+catch multiplier estimated by SAM.}
 }
 \value{
 An object of class \code{FLStock}.
