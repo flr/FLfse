@@ -12,6 +12,9 @@ adapt_dims <- function(obj1, obj2, fill.iter = FALSE) {
   ### save objects in list
   res <- list(obj1, obj2)
 
+  ### do nothing if dimensions are identical
+  if (identical(dims(obj1), dims(obj2))) return(res)
+
   ### min year
   min_year <- min(as.numeric(sapply(lapply(res, dims), "[", "minyear")))
   ### max year
