@@ -7,14 +7,14 @@
 \alias{FLR_SAM,FLStock,FLIndex-method}
 \title{Run SAM with FLR objects.}
 \usage{
-FLR_SAM(stk, idx, conf = NULL, par_ini = NULL, DoParallel = FALSE,
-  ...)
+FLR_SAM(stk, idx, conf = NULL, conf_full = FALSE, par_ini = NULL,
+  DoParallel = FALSE, ...)
 
 \S4method{FLR_SAM}{FLStock,FLIndices}(stk, idx, conf = NULL,
-  par_ini = NULL, DoParallel = FALSE, ...)
+  conf_full = FALSE, par_ini = NULL, DoParallel = FALSE, ...)
 
 \S4method{FLR_SAM}{FLStock,FLIndex}(stk, idx, conf = NULL,
-  par_ini = NULL, DoParallel = FALSE, ...)
+  conf_full = FALSE, par_ini = NULL, DoParallel = FALSE, ...)
 }
 \arguments{
 \item{stk}{Object of class \linkS4class{FLStock} with stock and fishery data.}
@@ -24,6 +24,9 @@ object with survey index time series.}
 
 \item{conf}{Optional configurations passed to SAM. Defaults to \code{NULL}.
 If provided, should be a list.}
+
+\item{conf_full}{Use provided configuration object in full without ANY
+checking (see Details for more information).}
 
 \item{par_ini}{Optional starting parameters for SAM. See details for more
 information.}
@@ -76,10 +79,13 @@ the name of this dimension can be either missing (\code{NA}), non-numeric
 or \code{-1}.
 
 Additional configurations can be passed as a list to SAM with the
-\code{conf} argument. \code{FLR_SAM} first generates a default model
-configuration with \code{stockassessment}'s \code{setup.sam.data}. If
-additional configurations are passed to \code{FLR_SAM}, they will replace
-the default configuration. For details about possible configurations and
+\code{conf} argument. If argument \code{conf_full} is set to \code{TRUE},
+the configuration is passed straight on to SAM without any checking.
+If argument \code{conf_full} is set to \code{FALSE} (default), then
+\code{FLR_SAM} first generates a default model configuration with
+\code{stockassessment}'s \code{setup.sam.data} and additional
+configurations available in \code{conf} replace default configurations.
+For details about possible configurations and
 format see '\code{help("defcon", package = "stockassessment")} and
 \url{https://github.com/fishfollower/SAM}.
 

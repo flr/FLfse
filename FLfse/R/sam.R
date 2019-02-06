@@ -20,6 +20,7 @@ matrix2FLQuant <- function(input) {
 ### load FLR objects and run SAM
 ### function not exported, use FLR_SAM instead
 FLR_SAM_run <- function(stk, idx, conf = NULL,
+                        conf_full = FALSE, ### use provided conf in full
                         force_list_output = FALSE,
                         DoParallel = FALSE, ### compute iterations in parallel
                         par_ini = NULL, ### initial parameter values
@@ -168,7 +169,7 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
     }
 
     ### insert configuration, if supplied to function
-    if (!is.null(conf)) {
+    if (!is.null(conf) & !isTRUE(conf_full)) {
 
       ### find slots that can be used
       conf_names <- intersect(names(conf), names(conf_sam))
@@ -198,6 +199,12 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
         }
 
       }
+
+    ### otherwise use provided configuration without ANY checking
+    } else if (isTRUE(conf_full)) {
+
+      conf_sam <- conf
+
     }
 
     ### define parameters for SAM if none are passed through
@@ -308,10 +315,13 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 #' or \code{-1}.
 #'
 #' Additional configurations can be passed as a list to SAM with the
-#' \code{conf} argument. \code{FLR_SAM} first generates a default model
-#' configuration with \code{stockassessment}'s \code{setup.sam.data}. If
-#' additional configurations are passed to \code{FLR_SAM}, they will replace
-#' the default configuration. For details about possible configurations and
+#' \code{conf} argument. If argument \code{conf_full} is set to \code{TRUE},
+#' the configuration is passed straight on to SAM without any checking.
+#' If argument \code{conf_full} is set to \code{FALSE} (default), then
+#' \code{FLR_SAM} first generates a default model configuration with
+#' \code{stockassessment}'s \code{setup.sam.data} and additional
+#' configurations available in \code{conf} replace default configurations.
+#' For details about possible configurations and
 #' format see '\code{help("defcon", package = "stockassessment")} and
 #' \url{https://github.com/fishfollower/SAM}.
 #'
@@ -345,6 +355,8 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 #'   object with survey index time series.
 #' @param conf Optional configurations passed to SAM. Defaults to \code{NULL}.
 #'   If provided, should be a list.
+#' @param conf_full Use provided configuration object in full without ANY
+#'   checking (see Details for more information).
 #' @param  par_ini Optional starting parameters for SAM. See details for more
 #'   information.
 #' @param DoParallel Optional, defaults to \code{FALSE}. If set to \code{TRUE},
@@ -369,8 +381,8 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 #'
 #' @export
 
-setGeneric("FLR_SAM", function(stk, idx, conf = NULL, par_ini = NULL,
-                               DoParallel = FALSE, ...) {
+setGeneric("FLR_SAM", function(stk, idx, conf = NULL, conf_full = FALSE,
+                               par_ini = NULL, DoParallel = FALSE, ...) {
   standardGeneric("FLR_SAM")
 })
 
@@ -378,26 +390,26 @@ setGeneric("FLR_SAM", function(stk, idx, conf = NULL, par_ini = NULL,
 #' @rdname FLR_SAM
 setMethod(f = "FLR_SAM",
           signature = signature(stk = "FLStock", idx = "FLIndices"),
-          definition = function(stk, idx, conf = NULL, par_ini = NULL,
-                                DoParallel = FALSE, ...) {
+          definition = function(stk, idx, conf = NULL, conf_full = FALSE,
+                                par_ini = NULL, DoParallel = FALSE, ...) {
 
-  FLR_SAM_run(stk = stk, idx = idx, conf = conf, DoParallel = DoParallel,
-              par_ini = par_ini, ...)
+  FLR_SAM_run(stk = stk, idx = idx, conf = conf, conf_full = conf_full,
+              DoParallel = DoParallel, par_ini = par_ini, ...)
 
 })
 ### stk = FLStock, idx = FLIndex
 #' @rdname FLR_SAM
 setMethod(f = "FLR_SAM",
           signature = signature(stk = "FLStock", idx = "FLIndex"),
-          definition = function(stk, idx, conf = NULL, par_ini = NULL,
-                                DoParallel = FALSE, ...) {
+          definition = function(stk, idx, conf = NULL, conf_full = FALSE,
+                                par_ini = NULL, DoParallel = FALSE, ...) {
 
   ### coerce FLIndex into FLIndices
   idx <- FLIndices(idx)
 
   ### run SPiCT
-  FLR_SAM_run(stk = stk, idx = idx, conf = conf, DoParallel = DoParallel,
-              par_ini = NULL, ...)
+  FLR_SAM_run(stk = stk, idx = idx, conf = conf, conf_full = conf_full,
+              DoParallel = DoParallel, par_ini = NULL, ...)
 
 })
 
