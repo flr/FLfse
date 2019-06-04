@@ -1,7 +1,7 @@
 Package: FLfse
 Type: Package
 Title: Fisheries Sampling Evaluation In FLR
-Version: 0.0.0.9004
+Version: 0.0.0.9005
 Authors@R: c(
   person("Simon H.", "Fischer", email = "simon.fischer@cefas.co.uk",
     role = c("aut", "cre")),
@@ -15,10 +15,10 @@ License: GPL-3
 Encoding: UTF-8
 LazyData: true
 Imports:
-    methods
+    methods,
+    foreach,
+    FLCore (>= 2.6.5)
 Depends:
-    FLCore (>= 2.6.5),
-    foreach
 Suggests: 
     spict (>= 1.2.1),
     stockassessment (>= 0.8.1),
