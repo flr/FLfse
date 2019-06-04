@@ -24,6 +24,7 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
                         force_list_output = FALSE,
                         DoParallel = FALSE, ### compute iterations in parallel
                         par_ini = NULL, ### initial parameter values
+                        NA_rm = TRUE, ### remove trailing years with NAs
                         ... ### passed to sam.fit()
                         ) {
 
@@ -66,7 +67,7 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
   }
 
   ### set parallel or serial processing of iterations
-  `%do_tmp%` <- ifelse(isTRUE(DoParallel), `%dopar%`, `%do%`)
+  `%do_tmp%` <- ifelse(isTRUE(DoParallel), foreach::`%dopar%`, foreach::`%do%`)
 
   ### go through iterations
   res_iter <- foreach(i = seq(dims(stk)$iter), .errorhandling = "pass",
@@ -103,30 +104,35 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
     })
     ### transpose matrix (required for SAM)
     dat_lst <- lapply(dat_lst, t)
+
     ### remove trailing years which contain only NAs
     ### otherwise SAM will complain
-    dat_lst <- lapply(dat_lst, function(x) {
-      ### find rows/years with NAs
-      years_NA <- apply(x, 1, function(y) {
-        all(is.na(y))
+    if(isTRUE(NA_rm)){
+
+      dat_lst <- lapply(dat_lst, function(x) {
+        ### find rows/years with NAs
+        years_NA <- apply(x, 1, function(y) {
+          all(is.na(y))
+        })
+        ### check if last year contains only NAs, if yes, find length of sequence
+        if (isTRUE(c(tail(years_NA, 1), use.names = FALSE))) {
+          ### length of TRUE/FALSE sequences
+          seq_lngth <- rle(years_NA)
+          ### length of last TRUE sequence
+          lngth_NA <- as.vector(tail(seq_lngth$lengths, 1))
+          ### find positions for corresponding years
+          pos_remove <- which(rownames(x) == tail(rownames(x), lngth_NA))
+          x <- x[-pos_remove, ]
+        }
+        return(x)
       })
-      ### check if last year contains only NAs, if yes, find length of sequence
-      if (isTRUE(c(tail(years_NA, 1), use.names = FALSE))) {
-        ### length of TRUE/FALSE sequences
-        seq_lngth <- rle(years_NA)
-        ### length of last TRUE sequence
-        lngth_NA <- as.vector(tail(seq_lngth$lengths, 1))
-        ### find positions for corresponding years
-        pos_remove <- which(rownames(x) == tail(rownames(x), lngth_NA))
-        x <- x[-pos_remove, ]
+      ### trim years of land.frac to dimension of catch
+      ### (after removing trailing NAs)
+      ### otherwise, weird things happen when a forecast is performed...
+      if (any(dim(dat_lst$residual.fleet) != dim(dat_lst$land.frac))) {
+        dat_lst$land.frac <- dat_lst$land.frac[seq(nrow(dat_lst$residual.fleet)),]
       }
-      return(x)
-    })
-    ### trim years of land.frac to dimension of catch
-    ### (after removing trailing NAs)
-    ### otherwise, weird things happen when a forecast is performed...
-    if (any(dim(dat_lst$residual.fleet) != dim(dat_lst$land.frac))) {
-      dat_lst$land.frac <- dat_lst$land.frac[seq(nrow(dat_lst$residual.fleet)),]
+
     }
 
     ### extract indices
@@ -142,7 +148,7 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
       tmp <- t(tmp)
       ### change age description for ssb/biomass surveys
       if (dim(tmp)[2] == 1) {
-        if (isTRUE(!is.numeric(dimnames(tmp)[[2]])) | ### non numeric ages
+        if (!grepl(x = "0", pattern = "^[0-9]+$") | ### non numeric ages
                    is.na(dimnames(tmp)[[2]]) | ### NA as age
                    dimnames(tmp)[[2]] == -1) {
           dimnames(tmp)[[2]] <- -1 ### recognized by SAM as SSB index
@@ -151,8 +157,16 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 
       ### add survey timing as attribute
       attr(tmp, "time") <- as.vector(range(x)[c("startf", "endf")])
+
       return(tmp)
     })
+    ### add partial attribute "part" to surveys, e.g. used for herring
+    part_n <- which(sapply(idx_i, type) == "partial")
+    if (length(part_n) > 1) {
+        for (idx_i_i in part_n) {
+          attr(dat_idx[[idx_i_i]], "part") <- as.vector(which(part_n == idx_i_i))
+        }
+    }
 
     ### add indices to input list
     dat_lst$surveys <- dat_idx
@@ -305,14 +319,15 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 #'      divided by the catch numbers at age)
 #' }
 #'
-#' Trailing years without data in \code{stk} are removed.
+#' Trailing years without data in \code{stk} are removed, unless turned
+#' of by setting \code{NA_rm = FALSE}.
 #'
 #' Survey indices are extracted from \code{idx}, using the \code{index}
 #' slot(s).
 #' SSB indices can be used. To define an index as SSB index, the first (age)
 #' dimension of the \code{index} slot of \code{idx} has to be of length 1 and
 #' the name of this dimension can be either missing (\code{NA}), non-numeric
-#' or \code{-1}.
+#' (e.g. "ssb") or \code{-1}.
 #'
 #' Additional configurations can be passed as a list to SAM with the
 #' \code{conf} argument. If argument \code{conf_full} is set to \code{TRUE},
@@ -345,6 +360,10 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 #' removed and if years are missing, the values from the last provided year are
 #' recycled.
 #'
+#' The default console output generated by SAM is not printed but saved. It is
+#' stored as an attribute of the fit and can be accessed with
+#' \code{attr(fit, "messages")}.
+#'
 #' @section Warning:
 #' This methods requires the \code{stockassessment} package and all its
 #' dependencies to be installed. For details how to obtain
@@ -362,6 +381,7 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 #' @param DoParallel Optional, defaults to \code{FALSE}. If set to \code{TRUE},
 #'   will perform iterations of stock in parallel. See Details below for
 #'   description.
+#' @param NA_rm Remove trailing years with NAs, defaults to \code{TRUE}.
 #' @param ... Additional arguments passed to \code{sam.fit()}, e.g.
 #'   \code{newtonsteps}
 #'
@@ -382,7 +402,8 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 #' @export
 
 setGeneric("FLR_SAM", function(stk, idx, conf = NULL, conf_full = FALSE,
-                               par_ini = NULL, DoParallel = FALSE, ...) {
+                               par_ini = NULL, DoParallel = FALSE, NA_rm = TRUE,
+                               ...) {
   standardGeneric("FLR_SAM")
 })
 
@@ -391,10 +412,12 @@ setGeneric("FLR_SAM", function(stk, idx, conf = NULL, conf_full = FALSE,
 setMethod(f = "FLR_SAM",
           signature = signature(stk = "FLStock", idx = "FLIndices"),
           definition = function(stk, idx, conf = NULL, conf_full = FALSE,
-                                par_ini = NULL, DoParallel = FALSE, ...) {
+                                par_ini = NULL, DoParallel = FALSE,
+                                NA_rm = TRUE, ...) {
 
   FLR_SAM_run(stk = stk, idx = idx, conf = conf, conf_full = conf_full,
-              DoParallel = DoParallel, par_ini = par_ini, ...)
+              DoParallel = DoParallel, par_ini = par_ini,  NA_rm = NA_rm,
+              ...)
 
 })
 ### stk = FLStock, idx = FLIndex
@@ -402,14 +425,16 @@ setMethod(f = "FLR_SAM",
 setMethod(f = "FLR_SAM",
           signature = signature(stk = "FLStock", idx = "FLIndex"),
           definition = function(stk, idx, conf = NULL, conf_full = FALSE,
-                                par_ini = NULL, DoParallel = FALSE, ...) {
+                                par_ini = NULL, DoParallel = FALSE,
+                                NA_rm = TRUE, ...) {
 
   ### coerce FLIndex into FLIndices
   idx <- FLIndices(idx)
 
   ### run SPiCT
   FLR_SAM_run(stk = stk, idx = idx, conf = conf, conf_full = conf_full,
-              DoParallel = DoParallel, par_ini = NULL, ...)
+              DoParallel = DoParallel, par_ini = NULL,  NA_rm = NA_rm,
+              ...)
 
 })
 
@@ -542,7 +567,7 @@ sam_to_FLStock <- function(object, ### sam object
     }
 
     ### get catch multiplier dimensions
-    ages_mult <- object$conf$minAge:fit$conf$maxAge
+    ages_mult <- object$conf$minAge:object$conf$maxAge
     yrs_mult <- object$conf$keyScaledYears
     ### create catch multiplier FLQuant
     catch_mult_data <- FLQuant(
@@ -754,7 +779,7 @@ setOldClass("sam_list")
 #' template, the returned \code{FLStock} is expanded.
 #'
 #'
-#' @param object Object of class \linkS4class{sam} with the results from a
+#' @param object Object of class \code{sam} with the results from a
 #'   SAM stock assessment run. Alternatively, object of class \code{sam_list},
 #'   i.e. a list of \code{sam} objects.
 #' @param stk Optional. Object of class \linkS4class{FLStock}, to which the

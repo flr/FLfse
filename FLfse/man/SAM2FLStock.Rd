@@ -27,7 +27,7 @@ SAM2FLStock(object, stk, uncertainty = FALSE, conf_level = 95,
   correct_catch = FALSE)
 }
 \arguments{
-\item{object}{Object of class \linkS4class{sam} with the results from a
+\item{object}{Object of class \code{sam} with the results from a
 SAM stock assessment run. Alternatively, object of class \code{sam_list},
 i.e. a list of \code{sam} objects.}
 

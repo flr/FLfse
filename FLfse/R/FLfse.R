@@ -6,7 +6,11 @@ NULL
 #' @import FLCore
 NULL
 
-### import from utils: capture output
+### import functions from utils
 ### avoid message while fitting SAM / SPiCT
-#' @importFrom utils capture.output
+#' @importFrom utils capture.output head
+NULL
+
+### import foreach package
+#' @import foreach
 NULL
