@@ -27,10 +27,10 @@ load package
 library(FLfse)
 ```
 The package includes example data for some stocks, see
-```{R}
+```{R, eval = FALSE}
 data(package = "FLfse")
 ```
-Currently, this includes North Sea cod and Irish Sea plaice.
+Currently, this includes the 2017 assessment for Irish Sea plaice, the 2018 assessments for North Sea cod, North Sea haddock and North Sea whiting and the 2019 assessment for North Sea herring.
 
 # Run stock assessments
 ## SAM
@@ -62,15 +62,6 @@ library(ggplotFL)
 plot(cod4)
 ```
 
-Irish Sea plaice is also included, as run by ICES WGCSE 2017:
-```{R, eval = FALSE}
-ple_iris <- FLR_SAM(stk = ple7a_stk, idx = ple7a_idx, conf = ple7a_conf_sam)
-### check convergence
-ple_iris$opt$convergence
-### results
-summary(ple_iris)
-plot(ple_iris)
-```
 
 ## SPiCT
 Another assessment method implemented is the Surplus Production in Continuous Time (SPiCT) model (Pedersen & Berg, 2017).
@@ -89,3 +80,27 @@ fit2 <- FLR_SPiCT(stk = ple7a_stk, idx = ple7a_idx, conf = conf)
 fit2
 ```
 
+## SAM for North Sea herring
+The HAWG assessment for North Sea herring can be replicated with `FLfse`.
+To get this assessment running, a different branch ("components") of the `stockassessment` package needs to be installed.
+The following code snippet shows how to do this without interfering with the global packages (please restart R if another version of stockassessment is currently loaded):
+
+```{R, eval = FALSE}
+### 1st: add a temporary R package library 
+.libPaths(c(tempdir(), .libPaths()))
+### 2nd: install stockassessment branch "components"
+devtools::install_github("fishfollower/SAM/stockassessment", ref = "components")
+
+### now, the assessment can be run:
+library(FLfse)
+library(stockassessment)
+### replicate HAWG assessment
+fit <- FLR_SAM(stk = her4_stk, idx = her4_idx, conf = her4_conf_sam, 
+                    conf_full = TRUE, NA_rm = FALSE)
+### check results
+fit
+plot(fit)
+summary(fit)
+### convert into FLStock
+stk <- SAM2FLStock(fit, her4_stk)
+```

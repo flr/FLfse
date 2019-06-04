@@ -28,23 +28,13 @@ load package
 library(FLfse)
 ```
 
-    ## Loading required package: FLCore
-
-    ## Loading required package: MASS
-
-    ## Loading required package: lattice
-
-    ## FLCore (Version 2.6.5, packaged: 2017-09-18 09:08:34 UTC)
-
-    ## Loading required package: foreach
-
 The package includes example data for some stocks, see
 
 ``` r
 data(package = "FLfse")
 ```
 
-Currently, this includes North Sea cod and Irish Sea plaice.
+Currently, this includes the 2017 assessment for Irish Sea plaice, the 2018 assessments for North Sea cod, North Sea haddock and North Sea whiting and the 2019 assessment for North Sea herring.
 
 Run stock assessments
 =====================
@@ -57,6 +47,12 @@ Fit SAM to North Sea cod data, with default parametrizations:
 ``` r
 fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx)
 ```
+
+    ## Loading required package: lattice
+
+    ## Loading required package: iterators
+
+    ## FLCore (Version 2.6.12, packaged: 2019-02-19 16:16:28 UTC)
 
 use the SAM assessment configuration as used by ICES WGNSSK 2018:
 
@@ -139,22 +135,24 @@ summary(fit)
 plot(fit)
 ```
 
-![](readme_files/figure-markdown_github/unnamed-chunk-3-1.png)
+![](readme_files/figure-markdown_github/unnamed-chunk-5-1.png)
 
 ``` r
 ### plot catch
 catchplot(fit)
 ```
 
-![](readme_files/figure-markdown_github/unnamed-chunk-3-2.png) The resulting "sam" object can then be converted into an FLStock object:
+![](readme_files/figure-markdown_github/unnamed-chunk-5-2.png) The resulting "sam" object can then be converted into an FLStock object:
 
 ``` r
-cod4 <- SAM2FLStock(fit)
+cod4 <- SAM2FLStock(fit, cod4_stk)
 ### plot with ggplotFL
 library(ggplotFL)
 ```
 
     ## Loading required package: ggplot2
+
+    ## Warning: package 'ggplot2' was built under R version 3.5.3
 
     ## 
     ## Attaching package: 'ggplot2'
@@ -170,66 +168,7 @@ library(ggplotFL)
 plot(cod4)
 ```
 
-![](readme_files/figure-markdown_github/unnamed-chunk-4-1.png)
-
-Irish Sea plaice is also included, as run by ICES WGCSE 2017:
-
-``` r
-ple_iris <- FLR_SAM(stk = ple7a_stk, idx = ple7a_idx, conf = ple7a_conf_sam)
-### check convergence
-ple_iris$opt$convergence
-```
-
-    ## [1] 0
-
-``` r
-### results
-summary(ple_iris)
-```
-
-    ##      R(age 1)   Low  High   SSB   Low  High Fbar(3-6)   Low  High
-    ## 1981    16551 11260 24329  7076  5793  8644     0.596 0.464 0.766
-    ## 1982    22504 16116 31425  6755  5595  8154     0.586 0.464 0.741
-    ## 1983    23987 17293 33274  6074  5103  7230     0.644 0.511 0.812
-    ## 1984    22914 16617 31597  7682  6429  9180     0.566 0.448 0.715
-    ## 1985    21131 15360 29070  8485  7094 10151     0.559 0.443 0.703
-    ## 1986    21740 15781 29948  9074  7594 10844     0.587 0.468 0.736
-    ## 1987    21188 15259 29421  8510  7173 10095     0.705 0.566 0.878
-    ## 1988    15564 11312 21416  7909  6656  9398     0.699 0.560 0.874
-    ## 1989    12469  8785 17699  7040  5886  8420     0.602 0.480 0.756
-    ## 1990    16109 11763 22059  6394  5341  7655     0.591 0.471 0.741
-    ## 1991    16474 12104 22420  5121  4309  6086     0.588 0.471 0.736
-    ## 1992    17953 13309 24218  5176  4355  6152     0.737 0.594 0.914
-    ## 1993    15901 12136 20833  4323  3618  5165     0.638 0.508 0.802
-    ## 1994    15076 11455 19842  4558  3769  5513     0.625 0.497 0.786
-    ## 1995    17779 13565 23302  3991  3289  4843     0.569 0.449 0.721
-    ## 1996    22407 17052 29444  4308  3520  5273     0.513 0.403 0.654
-    ## 1997    23010 17548 30173  4575  3743  5592     0.513 0.406 0.649
-    ## 1998    19856 15143 26036  4968  4034  6119     0.506 0.394 0.651
-    ## 1999    19079 14444 25202  5740  4595  7170     0.390 0.297 0.512
-    ## 2000    24304 18125 32588  6317  4995  7988     0.317 0.234 0.429
-    ## 2001    24550 18543 32503  7669  5977  9840     0.275 0.202 0.374
-    ## 2002    25270 18992 33623  9145  7038 11882     0.236 0.172 0.323
-    ## 2003    22396 16604 30209 10989  8337 14485     0.192 0.137 0.269
-    ## 2004    20835 15545 27925 11125  8415 14706     0.140 0.099 0.198
-    ## 2005    17936 13398 24011 10790  8203 14194     0.187 0.133 0.261
-    ## 2006    23208 17510 30759  9642  7299 12736     0.202 0.146 0.279
-    ## 2007    27272 20358 36533  7965  6025 10531     0.224 0.163 0.309
-    ## 2008    21940 16533 29116  7980  6052 10522     0.171 0.125 0.236
-    ## 2009    17347 12734 23631  9099  6841 12102     0.124 0.089 0.172
-    ## 2010    23865 17939 31748  9080  6948 11868     0.194 0.140 0.270
-    ## 2011    28083 20956 37634 10765  8006 14474     0.119 0.086 0.166
-    ## 2012    24327 18232 32461  9067  6708 12255     0.127 0.092 0.175
-    ## 2013    24507 18348 32733 10989  8117 14879     0.082 0.059 0.113
-    ## 2014    30255 21853 41887 11204  8318 15091     0.088 0.064 0.122
-    ## 2015    17550 12505 24631 15234 10932 21228     0.056 0.040 0.078
-    ## 2016    16169 11054 23653 22686 16464 31258     0.047 0.034 0.067
-
-``` r
-plot(ple_iris)
-```
-
-![](readme_files/figure-markdown_github/unnamed-chunk-5-1.png)
+![](readme_files/figure-markdown_github/unnamed-chunk-6-1.png)
 
 SPiCT
 -----
@@ -242,7 +181,7 @@ library(spict)
 
     ## Loading required package: TMB
 
-    ## Welcome to spict_v1.2.2@ee444581c9eb01c8514da9c2405f6d224ea92deb
+    ## Welcome to spict_v1.2.4@4e0937bc57d851c69c0781734beb24a22ba7fd55
 
     ## 
     ## Attaching package: 'spict'
@@ -321,7 +260,7 @@ fit
 plot(fit)
 ```
 
-![](readme_files/figure-markdown_github/unnamed-chunk-6-1.png)
+![](readme_files/figure-markdown_github/unnamed-chunk-7-1.png)
 
 ``` r
 ### pass additional configuration, set time step to 1 per year
@@ -388,3 +327,28 @@ fit2
     ##  F_2017.00/Fmsy 1.211872e-01 3.787100e-02 3.877993e-01 -2.1104184  
     ##  Catch_2017.00  8.103317e+02 5.238780e+02 1.253417e+03  6.6974437  
     ##  E(B_inf)       3.126376e+04           NA           NA 10.3502148
+
+SAM for North Sea herring
+-------------------------
+
+The HAWG assessment for North Sea herring can be replicated with `FLfse`. To get this assessment running, a different branch ("components") of the `stockassessment` package needs to be installed. The following code snippet shows how to do this without interfering with the global packages (please restart R if another version of stockassessment is currently loaded):
+
+``` r
+### 1st: add a temporary R package library 
+.libPaths(c(tempdir(), .libPaths()))
+### 2nd: install stockassessment branch "components"
+devtools::install_github("fishfollower/SAM/stockassessment", ref = "components")
+
+### now, the assessment can be run:
+library(FLfse)
+library(stockassessment)
+### replicate HAWG assessment
+fit <- FLR_SAM(stk = her4_stk, idx = her4_idx, conf = her4_conf_sam, 
+                    conf_full = TRUE, NA_rm = FALSE)
+### check results
+fit
+plot(fit)
+summary(fit)
+### convert into FLStock
+stk <- SAM2FLStock(fit, her4_stk)
+```
