@@ -1,3 +1,6 @@
+### suppress warning about variables used in foreach loop
+### when checking package
+utils::globalVariables(c("fit_i", "iter_i"))
 ### ------------------------------------------------------------------------ ###
 ### run SAM with FLStock object ####
 ### ------------------------------------------------------------------------ ###
@@ -925,5 +928,406 @@ setMethod(f = "SAM2FLStock",
 
   ### return input stock, updated wit requested data
   return(stk)
+
+})
+
+### ------------------------------------------------------------------------ ###
+### get SAM parameter values ####
+### ------------------------------------------------------------------------ ###
+
+### extract parameters of model fit
+sam_getpar <- function(fit) {
+
+  p <- fit$pl
+  p$missing <- NULL
+  attr(p, "what") <- NULL
+
+  return(p)
+
+}
+
+#' Get parameter estimates from SAM model fit.
+#'
+#' This function extracts the parameter estimates from a SAM model fit. These
+#' are useful e.g. as initial values in subsequent model fits and can improve
+#' model convergence/computing time.
+#'
+#' @param fit A single SAM model fit of class \code{sam} or a list of fits of
+#' class \code{sam_lst}.
+#'
+#' @return A list with the model parameters of the SAM or a list of them in case
+#' of several supplied models
+#'
+#' @examples
+#' ### fit SAM to North Sea cod
+#' fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
+#'
+#' ### extract parameters
+#' pars <- getpars(fit)
+#'
+#' ### use them as starting values
+#' fit2 <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam,
+#'                 par_ini = pars)
+#' @export
+
+setGeneric("getpars", function(fit) {
+  standardGeneric("getpars")
+})
+
+### fit = sam
+#' @rdname getpars
+setMethod(f = "getpars",
+          signature = signature(fit = "sam"),
+          definition = function(fit) {
+
+  sam_getpar(fit)
+
+})
+### fit = sam_list
+#' @rdname getpars
+setMethod(f = "getpars",
+          signature = signature(fit = "sam_list"),
+          definition = function(fit) {
+
+  foreach(fit_i = fit, .errorhandling = "pass") %do% {
+
+    sam_getpar(fit_i)
+
+  }
+
+})
+
+
+### ------------------------------------------------------------------------ ###
+### extract uncertainty from SAM object ####
+### ------------------------------------------------------------------------ ###
+### function for creating replicates based on estimation of uncertainty in SAM
+### note: SAM works on a log scale and all reported parameters are also on a
+###       scale, even standard deviations.
+###       Therefore, the values returned from this function are exponentiated
+
+
+#' Create replicates/iterations of SAM model fit based on variance-covariance
+#' matrix
+#'
+#' This function use the uncertainty estimated by SAM to create
+#' replicates/iterations of assessment results. The function uses the
+#' variance-covariance matrix to quantify uncertainty.
+#'
+#' The returned objects are \code{FLQuant}s where the iteration dimension contains the
+#' replicates. Each replicate is internally consistent, e.g. the fishing
+#' mortality matches the stock numbers of the same replicate.
+#'
+#' The following metrics are returned:
+#' \itemize{
+#'   \item{\code{stock.n}} Stock numbers at age for all years,
+#'                         \code{FLQuant}
+#'   \item{\code{harvest}} Fishing mortalities at age for all years,
+#'                         \code{FLQuant}
+#'   \item{\code{survey_catchability}} Catchability at age for all years for all
+#'                                     survey indices, list of \code{FLQuant}s
+#'   \item{\code{catch_sd}} Standard deviation of the catch numbers at age,
+#'                          time invariant, \code{FLQuant}
+#'   \item{\code{survey_sd}} Standard deviation of all surveys at age, time
+#'                           invariant, list of \code{FLQuants},
+#'   \item{\code{survey_cov}} Covariance matrices of survey ages, one for each
+#'     survey. Return object is a list of lists, the first level corresponds to
+#'     the replicates, the second level to the surveys. If no covariance
+#'     between ages is assumed in the SAM model, the diagonal in the covariance
+#'     matrices is simply the square root of the standard deviation
+#'     (in \code{survey_sd})
+#'   \item{\code{proc_error}} Standard deviation of the stock numbers at age,
+#'     time invariant, class \code{FLQuant}. This corresponds to the survival
+#'     process error assumed/estimated, i.e. quantifies how much the actual
+#'     stock numbers at age deviate from the deterministic catch equation.
+#'   \item{\code{catch_n}} Estimates of catch numbers at age for all years. This
+#'     differs from the assessment input values. If the SAM model fit contains
+#'     catch multipliers, the values returned here are corrected for this.
+#'     Class \code{FLQuant}.
+#' }
+#'
+#'
+#' @param fit A SAM model fit object of class \code{sam}.
+#' @param n Number of replicates
+#' @param print_screen If set to \code{TRUE}, print output of \code{TMB::sdreport} to screen.
+#' @param idx_cov If set to \code{TRUE}, return covariance of survey index/indices.
+#' @param catch_est If set to \code{TRUE}, return catch estimates from SAM.
+
+#'
+#' @return A list of FLQuants with the elements: stock.n, harvest,
+#'   survey_catchability, catch_sd, survey_sd, survey_cov, proc_error, catch_n.
+#'
+#' @examples
+#' ### fit SAM to North Sea cod
+#' fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
+#'
+#' ### create 2 replicates
+#' reps <- SAM_uncertainty(fit, n = 2, idx_cov = TRUE, catch_est = TRUE)
+#' @export
+
+setGeneric("SAM_uncertainty", function(fit, n = 1000, print_screen = FALSE,
+                                       idx_cov = FALSE, catch_est = FALSE) {
+  standardGeneric("SAM_uncertainty")
+})
+
+### fit = sam
+#' @rdname SAM_uncertainty
+setMethod(f = "SAM_uncertainty",
+          signature = signature(fit = "sam"),
+          definition = function(fit, n = 1000, print_screen = FALSE,
+                                idx_cov = FALSE, catch_est = FALSE) {
+
+  ### check if required package is available
+  if (!requireNamespace("TMB", quietly = TRUE)) {
+    stop(paste("Package 'TMB' needed for this function to work.",
+               "Please install it."),
+         call. = FALSE)
+  }
+
+  ### index for fishing mortality ages
+  idxF <- fit$conf$keyLogFsta[1, ] + 1# +dim(stk)[1]
+  idxF <- idxF[idxF != 0] ### remove 0s
+
+  ### index for F variances (usually some ages are bound)
+  #idxNVar <- fit$conf$keyVarLogN
+
+  ### get ages used for calculating fbar
+  #bAges <- fit$conf$fbarRange
+  #bAges <- do.call(':', as.list(bAges))
+
+  ### index for stock numbers ages
+  #idxN <- 1:ncol(natural.mortality)
+  #idxN <- seq(min(fit$data$minAgePerFleet), max(fit$data$maxAgePerFleet))
+  ### index for observation variances
+  idxObs <- fit$conf$keyVarObs # starts at 0
+
+  ##Resample estimated values to get N, F and q
+
+  ### calculate standard deviations of model parameters
+  . <- capture.output(sds <- TMB::sdreport(obj = fit$obj,
+                                           par.fixed = fit$opt$par,
+                                           getJointPrecision = TRUE))
+  if (isTRUE(print_screen)) cat(paste0(., sep = "\n"))
+
+  ### extract values for parameters
+  est <- c(sds$par.fixed, sds$par.random)
+  ### get covariance matrix of all model parameters
+  cov <- solve(sds$jointPrecision)
+
+  ### create random values based on estimation and covariance
+  sim.states <- mvrnorm(n, est, cov) ### REPLACE with rmvnorm()
+  ### matrix, columns are values, rows are requested samples
+  table(colnames(sim.states))
+  ### contains, among others, logF, logN...
+
+  ### combine SAM estimate and random samples
+  #dat <- rbind(est, sim.states)
+  dat <- sim.states
+
+  ### workaround if only one iteration/replicate
+  if (!is.matrix(dat)) dat <- t(as.matrix(dat))
+
+  ### ---------------------------------------------------------------------- ###
+  ### stock ####
+  ### ---------------------------------------------------------------------- ###
+
+  ### stock characteristics
+  min_age <- min(fit$data$minAgePerFleet[fit$data$fleetTypes == 0])
+  max_age <- max(fit$data$maxAgePerFleet[fit$data$fleetTypes == 0])
+  years <- fit$data$years
+  ### FLQuant template for stock
+  stk_template <- FLQuant(dimnames = list(age = min_age:max_age, year = years,
+                                          iter = 1:n))
+
+  ### numbers at age
+  stock.n <- stk_template
+  stock.n[] <- exp(t(dat[, colnames(dat) == "logN"]))
+
+  ### F at age
+  harvest <- stk_template
+  ### insert values for estimated ages
+  harvest[unique(idxF)] <- exp(t(dat[, colnames(dat) == "logF"]))
+  ### duplicate ages, if some of them are bound
+  harvest[] <- harvest[idxF]
+
+  ### ---------------------------------------------------------------------- ###
+  ### surveys ####
+  ### ---------------------------------------------------------------------- ###
+
+  ### survey specs
+  idx_surveys <- which(fit$data$fleetTypes > 0) ### which observation are surveys
+  ### age range of surveys
+  survey_ages <- lapply(seq_along(idx_surveys), function(x) {
+    seq(fit$data$minAgePerFleet[idx_surveys][x],
+        fit$data$maxAgePerFleet[idx_surveys][x])
+  })
+  ### index for estimated parameters
+  idx_LogFpar <- lapply(idx_surveys, function(x) {
+    tmp <- fit$conf$keyLogFpar[x, ] + 1
+    tmp <- tmp[tmp > 0]
+  })
+
+  sum(colnames(dat) == "logFpar") ### there are 9 parameters for cod
+  ### 5 for Q1 (ages 1-5), 4 for Q3 (ages 1-4).
+  survey_ages_idx <- split(seq(length(unlist(survey_ages))),
+                           rep(seq(survey_ages), sapply(survey_ages, length)))
+
+  ### get catchability at age (time-invariant) samples
+  catchability <- lapply(seq_along(idx_surveys), function(x) {
+
+    ### create FLQuant template
+    tmp <- FLQuant(dimnames = list(age = survey_ages[[x]],
+                                   year = "all", iter = 1:n))
+    ### fill with catchability values
+    tmp[] <-
+      exp(t(dat[, colnames(dat) == "logFpar", drop = FALSE][, idx_LogFpar[[x]]]))
+
+    return(tmp)
+
+  })
+
+  ### ---------------------------------------------------------------------- ###
+  ### standard deviation - catch ####
+  ### ---------------------------------------------------------------------- ###
+  ### time-invariant
+
+  ### template
+  catch_sd <- FLQuant(dimnames = list(age = dimnames(stock.n)$age, year = "all",
+                                      iter = 1:n))
+  # sum(colnames(dat) == "logSdLogObs")
+
+  ### index for catch sd (some ages are linked)
+  catch_sd_idx <- idxObs[1, ][idxObs[1, ] > -1] + 1
+
+  ### extract values
+  catch_sd[] <-
+    exp(t(dat[, colnames(dat) == "logSdLogObs", drop = FALSE][, catch_sd_idx]))
+  ### logSdLogObs is the log of the SD of the log observations
+  ### exponentiate values here to get SD (and not logSD)
+
+  ### ---------------------------------------------------------------------- ###
+  ### standard deviation - surveys ####
+  ### ---------------------------------------------------------------------- ###
+  ### time-invariant
+
+  ### get catchability at age (time-invariant) samples
+  survey_sd <- lapply(seq_along(idx_surveys), function(x) {
+
+    ### create FLQuant template
+    tmp <- FLQuant(dimnames = list(age = survey_ages[[x]],
+                                   year = "all", iter = 1:n))
+    ### index for sd (some ages are linked)
+    idx_sd <- idxObs[idx_surveys[x], ]
+    idx_sd <- idx_sd[idx_sd > -1] + 1
+
+    ### fill with catchability values
+    tmp[] <- exp(t(dat[, colnames(dat) == "logSdLogObs", drop = FALSE][, idx_sd]))
+
+    return(tmp)
+
+  })
+
+  ### ---------------------------------------------------------------------- ###
+  ### surveys - get covariance ####
+  ### ---------------------------------------------------------------------- ###
+
+  if (isTRUE(idx_cov)) {
+    . <- capture.output(survey_cov <- foreach(iter_i = 1:n) %do% {
+
+      fit$obj$fn(sim.states[iter_i, 1:length(sds$par.fixed)])
+      cov <- fit$obj$report()$obsCov
+
+      return(cov[idx_surveys])
+
+    })
+
+  } else {
+
+    survey_cov <- NULL
+
+  }
+
+  ### ---------------------------------------------------------------------- ###
+  ### stock.n uncertainty ####
+  ### ---------------------------------------------------------------------- ###
+  ### process error
+
+  ### get index for ages
+  idx_SdLogN <- fit$conf$keyVarLogN + 1
+
+  ### FLQuant template
+  SdLogN <- catch_sd %=% NA_integer_
+
+  ### fill
+  SdLogN[] <-
+    exp(t(dat[, colnames(dat) == "logSdLogN", drop = FALSE][, idx_SdLogN]))
+
+  ### ---------------------------------------------------------------------- ###
+  ### get catch estimates ####
+  ### ---------------------------------------------------------------------- ###
+
+  if (isTRUE(catch_est)) {
+
+    ### catch fleet index/indices
+    catch_fleets <- which(fit$data$fleetTypes == 0)
+    catch_desc <- fit$data$aux
+
+
+    . <- capture.output(res_n <- foreach(iter_i = 1:n, .combine = c
+    ) %do% {
+
+      fit$obj$fn(sim.states[iter_i, 1:length(sds$par.fixed)])
+      tmp <- cbind(fit$data$aux, est = fit$obj$report()$predObs)
+      tmp <- tmp[tmp[, 2] == catch_fleets, ]
+      tmp <- stats::aggregate(est ~ age + year, tmp,
+                              FUN = sum)
+      tmp_full <- expand.grid(age = unique(tmp$age),
+                              year = unique(tmp$year))
+      tmp <- merge(x = tmp, y = tmp_full, all = TRUE)
+      tmp <- tmp[order(tmp$year, tmp$age), ]
+      return(tmp$est)
+
+    })
+    catch_n <- FLQuant(NA,
+                       dimnames = list(year = rownames(fit$data$catchMeanWeight),
+                                       age = colnames(fit$data$catchMeanWeight),
+                                       iter = seq(n)))
+    catch_n[] <- exp(res_n)
+
+    ### apply catch multiplier, if used
+    if (fit$conf$noScaledYears > 0) {
+
+      ### get catch multiplier dimensions
+      ages_mult <- fit$conf$minAge:fit$conf$maxAge
+      yrs_mult <- fit$conf$keyScaledYears
+      ### get multiplier positions in created data set
+      pos_mult <- which(colnames(dat) == "logScale")
+      ### create catch multiplier FLQuant
+      catch_mult_data <- FLQuant(NA,
+                                 dimnames = list(year = fit$conf$keyScaledYears,
+                                                 age = fit$conf$minAge:fit$conf$maxAge,
+                                                 iter = seq(nrow(dat))))
+      catch_mult_data[] <- rep(t(dat[, pos_mult]), each = length(ages_mult))
+      ### model values in log scale, exponentiate
+      catch_mult_data <- exp(catch_mult_data)
+      ### for simpler calculations, use catch_n as template
+      catch_mult <- catch_n %=% 1
+      catch_mult[ac(ages_mult), ac(yrs_mult)] <- catch_mult_data
+
+      ### correct catch.n
+      catch_n <- catch_n * catch_mult
+
+    }
+
+  } else {
+
+    catch_n <- NULL
+
+  }
+
+  return(list(stock.n = stock.n, harvest = harvest,
+              survey_catchability = catchability, catch_sd = catch_sd,
+              survey_sd = survey_sd, survey_cov = survey_cov,
+              proc_error = SdLogN, catch_n = catch_n))
 
 })

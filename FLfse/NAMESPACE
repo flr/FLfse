@@ -3,6 +3,8 @@
 export(FLR_SAM)
 export(FLR_SPiCT)
 export(SAM2FLStock)
+export(SAM_uncertainty)
+export(getpars)
 import(FLCore)
 import(foreach)
 import(methods)
