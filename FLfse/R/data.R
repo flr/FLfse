@@ -8,6 +8,16 @@
 #' @source \url{https://www.stockassessment.org}
 "cod4_stk"
 
+#' North Sea cod
+#'
+#' Assessment input data for North Sea cod as used by ICES WGNSSK 2019. The time
+#' series covers the years 1963-2019, with catches up to and including 2018.
+#'
+#' @format An object of class \code{FLStock}
+#'
+#' @source \url{https://www.stockassessment.org}
+"cod4_stk_2019"
+
 #' North Sea cod indices
 #'
 #' Survey indices for North Sea cod. The time
@@ -23,6 +33,22 @@
 #'
 #' @source \url{https://www.stockassessment.org}
 "cod4_idx"
+
+#' North Sea cod indices
+#'
+#' Survey indices for North Sea cod. The time
+#' series covers the years 1963-2019. Two surveys are included: Q1 IBTS and
+#' Q3 IBTS. The survey values are the values as used by WGNSSk 2019 and not the
+#' raw values.
+#'
+#' @format An object of class \code{FLIndices} with elements:
+#' \describe{
+#'   \item{IBTS_Q1_gam}{An object of class \code{FLIndex}}
+#'   \item{IBTS_Q3_gam}{An object of class \code{FLIndex}}
+#' }
+#'
+#' @source \url{https://www.stockassessment.org}
+"cod4_idx_2019"
 
 #' North Sea cod SAM configuration file
 #'
