@@ -527,7 +527,11 @@ sam_to_FLStock <- function(object, ### sam object
 
   ### catch ####
   ### catch weight @ age
-  catch.wt <- t(object$data$catchMeanWeight)
+  if (isTRUE(length(dim(object$data$catchMeanWeight)) == 3)) {
+    catch.wt <- t(object$data$catchMeanWeight[,,, drop = TRUE])
+  } else {
+    catch.wt <- t(object$data$catchMeanWeight)
+  }
   n_ages <- dim(catch.wt)[1]
   n_yrs <- dim(catch.wt)[2]
   catch.wt(stk)[1:n_ages, 1:n_yrs] <- catch.wt
@@ -619,7 +623,11 @@ sam_to_FLStock <- function(object, ### sam object
 
   ### landings
   ### calculate with landings fraction of total catch
-  lfrac <- t(object$data$landFrac)
+  if (isTRUE(length(dim(object$data$landFrac)) == 3)) {
+    lfrac <- t(object$data$landFrac[,,, drop = TRUE])
+  } else {
+    lfrac <- t(object$data$landFrac)
+  }
   n_ages <- dim(lfrac)[1]
   n_yrs <- dim(lfrac)[2]
   lfrac_qnt <- qnt ### FLQuant template
@@ -627,7 +635,11 @@ sam_to_FLStock <- function(object, ### sam object
   ### calculate landings numbers @ age
   landings.n(stk) <- catch.n(stk) * lfrac_qnt
   ### landings weights @ age
-  landings.wt <- t(object$data$landMeanWeight)
+  if (isTRUE(length(dim(object$data$landMeanWeight)) == 3)) {
+    landings.wt <- t(object$data$landMeanWeight[,,, drop = TRUE])
+  } else {
+    landings.wt <- t(object$data$landMeanWeight)
+  }
   n_ages <- dim(landings.wt)[1]
   n_yrs <- dim(landings.wt)[2]
   landings.wt(stk)[1:n_ages, 1:n_yrs] <- landings.wt
@@ -650,7 +662,11 @@ sam_to_FLStock <- function(object, ### sam object
   ### calculate discards number @ age
   discards.n(stk) <- catch.n(stk) * (1 - lfrac_qnt)
   ### discards weights @ age
-  discards.wt <- t(object$data$disMeanWeight)
+  if (isTRUE(length(dim(object$data$disMeanWeight)) == 3)) {
+    discards.wt <- t(object$data$disMeanWeight[,,, drop = TRUE])
+  } else {
+    discards.wt <- t(object$data$disMeanWeight)
+  }
   n_ages <- dim(discards.wt)[1]
   n_yrs <- dim(discards.wt)[2]
   discards.wt(stk)[1:n_ages, 1:n_yrs] <- discards.wt
@@ -677,7 +693,11 @@ sam_to_FLStock <- function(object, ### sam object
   mat(stk)[1:n_ages, 1:n_yrs] <- mat
 
   ### proportion of F before spawning
-  harvest.spwn <- t(object$data$propF)
+  if (isTRUE(length(dim(object$data$propF)) == 3)) {
+    harvest.spwn <- t(object$data$propF[,,, drop = TRUE])
+  } else {
+    harvest.spwn <- t(object$data$propF)
+  }
   n_ages <- dim(harvest.spwn)[1]
   n_yrs <- dim(harvest.spwn)[2]
   harvest.spwn(stk)[1:n_ages, 1:n_yrs] <- harvest.spwn
