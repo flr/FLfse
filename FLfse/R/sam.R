@@ -151,9 +151,10 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
       tmp <- t(tmp)
       ### change age description for ssb/biomass surveys
       if (dim(tmp)[2] == 1) {
-        if (!grepl(x = "0", pattern = "^[0-9]+$") | ### non numeric ages
-                   is.na(dimnames(tmp)[[2]]) | ### NA as age
-                   dimnames(tmp)[[2]] == -1) {
+        if (!grepl(x = dimnames(tmp)[[2]],
+                   pattern = "^[0-9]+$") | ### non numeric age
+              is.na(dimnames(tmp)[[2]]) | ### NA as age
+              dimnames(tmp)[[2]] == -1) {
           dimnames(tmp)[[2]] <- -1 ### recognized by SAM as SSB index
         }
       }
