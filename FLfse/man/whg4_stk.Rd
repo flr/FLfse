@@ -3,17 +3,37 @@
 \docType{data}
 \name{whg4_stk}
 \alias{whg4_stk}
+\alias{whg4_idx}
+\alias{whg4_conf_sam}
 \title{North Sea whiting}
-\format{An object of class \code{FLStock}}
+\format{
+An object of class \code{FLStock} of dimension 9 x 41 x 1 x 1 x 1 x 1.
+
+An object of class \code{FLIndices} of length 2.
+
+An object of class \code{list} of length 20.
+}
 \source{
 \url{https://www.stockassessment.org}
+
+#' @examples
+# Replicate the 2017 assessment:
+fit <- FLR_SAM(stk = whg4_stk,
+               idx = whg4_idx,
+               conf = whg4_conf_sam)
 }
 \usage{
 whg4_stk
+
+whg4_idx
+
+whg4_conf_sam
 }
 \description{
+Whiting (\emph{Merlangius merlangus}) in Subarea 4 and Division 7.d
+(North Sea and eastern English Channel).
 Assessment input data for North Sea whiting as used by ICES WGNSSK 2018.
-The time series covers the years 1978-2018, with catches up to and
-including 2017.
+Includes the stock, the indices and the SAM configuration. See the example
+below for how to run the assessment.
 }
 \keyword{datasets}

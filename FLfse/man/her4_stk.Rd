@@ -3,19 +3,44 @@
 \docType{data}
 \name{her4_stk}
 \alias{her4_stk}
+\alias{her4_idx}
+\alias{her4_conf_sam}
 \title{North Sea herring}
-\format{An object of class \code{FLStock}}
+\format{
+An object of class \code{FLStock} of dimension 9 x 73 x 1 x 1 x 1 x 1.
+
+An object of class \code{FLIndices} of length 8.
+
+An object of class \code{list} of length 21.
+}
 \source{
 \url{https://github.com/ices-eg/wg_HAWG/tree/master/NSAS}
+
+#' @examples
+\dontrun{
+# NOTE: the herring SAM assessment requires a different version of
+# the stockassessment package
+fit <- FLR_SAM(stk = her4_stk,
+               idx = her4_idx,
+               conf = her4_conf_sam)
+}
 }
 \usage{
 her4_stk
+
+her4_idx
+
+her4_conf_sam
 }
 \description{
-Herring (Clupea harengus) in Subarea 4 and divisions 3.a and 7.d, autumn
-spawners (North Sea, Skagerrak and Kattegat, eastern English Channel).
+Herring (Clupea harengus) in Subarea 4 and divisions 3.a and 7.d,
+autumn spawners (North Sea, Skagerrak and Kattegat, eastern English Channel).
 Assessment input data for North Sea herring as used by ICES HAWG 2019.
-The time series covers the years 1947-2019, with catches up to and
-including 2018.
+Includes the stock, the indices and the SAM configuration.
+}
+\details{
+Please note that the herring SAM assessment requires a different version of
+the stockassessment package. For details, see the readme at
+https://github.com/shfischer/FLfse
 }
 \keyword{datasets}

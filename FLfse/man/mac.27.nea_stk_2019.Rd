@@ -27,7 +27,8 @@ mac.27.nea_conf_2019
 Mackerel  (\emph{Scomber  scombrus}) in subareas 1-8 and 14, and in
 Division 9.a (the Northeast Atlantic and adjacent waters).
 Assessment input data for Northeast Atlantic mackerel as used by ICES WGWIDE
-2019. Includes the stock, the indices and the SAM configuration.
+2019. Includes the stock, the indices and the SAM configuration. See the
+example below for how to run the assessment.
 }
 \details{
 \code{mac.27.nea_stk_2019} includes tagging data, stored as an attribute in

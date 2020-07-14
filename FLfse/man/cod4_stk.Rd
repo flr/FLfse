@@ -3,16 +3,57 @@
 \docType{data}
 \name{cod4_stk}
 \alias{cod4_stk}
+\alias{cod4_stk_2019}
+\alias{cod4_idx}
+\alias{cod4_idx_2019}
+\alias{cod4_conf_sam}
 \title{North Sea cod}
-\format{An object of class \code{FLStock}}
+\format{
+An object of class \code{FLStock} of dimension 6 x 56 x 1 x 1 x 1 x 1.
+
+An object of class \code{FLStock} of dimension 6 x 57 x 1 x 1 x 1 x 1.
+
+An object of class \code{FLStock} of dimension 6 x 57 x 1 x 1 x 1 x 1.
+
+An object of class \code{FLIndices} of length 2.
+
+An object of class \code{FLIndices} of length 2.
+
+An object of class \code{list} of length 20.
+}
 \source{
 \url{https://www.stockassessment.org}
 }
 \usage{
 cod4_stk
+
+cod4_stk_2019
+
+cod4_stk_2019
+
+cod4_idx
+
+cod4_idx_2019
+
+cod4_conf_sam
 }
 \description{
-Assessment input data for North Sea cod as used by ICES WGNSSK 2018. The time
-series covers the years 1963-2018, with catches up to and including 2017.
+Cod (\emph{Gadus morhua}) in Subarea 4, Division 7.d, and Subdivision 20
+(North Sea, eastern English Channel, Skagerrak).
+Assessment input data for North Sea cod as used by ICES WGNSSK 2018 and 2019.
+Includes the stock, the indices and the SAM configuration. See the example(s)
+below for how to run the assessment.
+}
+\examples{
+# Replicate the 2018 assessment:
+fit <- FLR_SAM(stk = cod4_stk,
+               idx = cod4_idx,
+               conf = cod4_conf_sam)
+
+# Replicate the 2019 assessment:
+fit <- FLR_SAM(stk = cod4_stk_2019,
+               idx = cod4_idx_2019,
+               conf = cod4_conf_sam)
+
 }
 \keyword{datasets}
