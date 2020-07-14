@@ -1,11 +1,10 @@
 Package: FLfse
 Type: Package
 Title: Fisheries Sampling Evaluation In FLR
-Version: 0.0.0.9007
+Version: 0.0.0.9008
 Authors@R: c(
   person("Simon H.", "Fischer", email = "simon.fischer@cefas.co.uk",
     role = c("aut", "cre")),
-  person("Gwladys", "Lambert", role = "aut"),
   person("Sven", "Kupschus", role = "aut"))
 Maintainer: Simon Fischer <simon.fischer@cefas.co.uk>
 Description: Fisheries Sampling Evaluation in FLR.
@@ -21,9 +20,9 @@ Imports:
 Depends:
 Suggests: 
     spict (>= 1.2.1),
-    stockassessment (>= 0.8.1),
+    stockassessment (>= 0.9.0),
     TMB,
     mgcv,
     FLXSA (>= 2.6.0),
     doParallel
-RoxygenNote: 6.1.1
+RoxygenNote: 7.1.0
