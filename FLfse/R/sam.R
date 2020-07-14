@@ -1,6 +1,6 @@
 ### suppress warning about variables used in foreach loop
 ### when checking package
-utils::globalVariables(c("fit_i", "iter_i"))
+utils::globalVariables(c("fit_i", "iter_i", "i"))
 ### ------------------------------------------------------------------------ ###
 ### run SAM with FLStock object ####
 ### ------------------------------------------------------------------------ ###

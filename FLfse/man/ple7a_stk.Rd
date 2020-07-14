@@ -4,10 +4,16 @@
 \name{ple7a_stk}
 \alias{ple7a_stk}
 \alias{ple7a_idx}
+\alias{ple7a_stk_2019}
+\alias{ple7a_idx_2019}
 \alias{ple7a_conf_sam}
 \title{Irish Sea plaice}
 \format{
 An object of class \code{FLStock} of dimension 8 x 36 x 1 x 1 x 1 x 1.
+
+An object of class \code{FLIndices} of length 3.
+
+An object of class \code{FLStock} of dimension 8 x 38 x 1 x 1 x 1 x 1.
 
 An object of class \code{FLIndices} of length 3.
 
@@ -18,21 +24,24 @@ ple7a_stk
 
 ple7a_idx
 
+ple7a_stk_2019
+
+ple7a_idx_2019
+
 ple7a_conf_sam
 }
 \description{
 Plaice (\emph{Pleuronectces platessa}) in Division 7.a (Irish Sea).
-Assessment input data for Irish Sea plaice as used by ICES WGCSE 2017.
+Assessment input data for Irish Sea plaice as used by ICES WGCSE 2017 and
+2019.
 Includes the stock, the indices and the SAM configuration. See the example
 below for how to run the assessment.
 }
 \examples{
-# Replicate the 2017 assessment:
-\dontrun{
-fit <- FLR_SAM(stk = ple7a_stk,
-               idx = ple7a_idx,
+# Replicate the 2019 assessment:
+fit <- FLR_SAM(stk = ple7a_stk_2019,
+               idx = ple7a_idx_2019,
                conf = ple7a_conf_sam)
-}
 
 }
 \keyword{datasets}

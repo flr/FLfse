@@ -15,15 +15,6 @@ An object of class \code{list} of length 21.
 }
 \source{
 \url{https://github.com/ices-eg/wg_HAWG/tree/master/NSAS}
-
-#' @examples
-\dontrun{
-# NOTE: the herring SAM assessment requires a different version of
-# the stockassessment package
-fit <- FLR_SAM(stk = her4_stk,
-               idx = her4_idx,
-               conf = her4_conf_sam)
-}
 }
 \usage{
 her4_stk
@@ -42,5 +33,15 @@ Includes the stock, the indices and the SAM configuration.
 Please note that the herring SAM assessment requires a different version of
 the stockassessment package. For details, see the readme at
 https://github.com/shfischer/FLfse
+}
+\examples{
+# NOTE: the herring SAM assessment requires a different version of
+# the stockassessment package
+\dontrun{
+fit <- FLR_SAM(stk = her4_stk,
+               idx = her4_idx,
+               conf = her4_conf_sam)
+}
+
 }
 \keyword{datasets}

@@ -38,22 +38,27 @@
 #' Irish Sea plaice
 #'
 #' Plaice (\emph{Pleuronectces platessa}) in Division 7.a (Irish Sea).
-#' Assessment input data for Irish Sea plaice as used by ICES WGCSE 2017.
+#' Assessment input data for Irish Sea plaice as used by ICES WGCSE 2017 and
+#' 2019.
 #' Includes the stock, the indices and the SAM configuration. See the example
 #' below for how to run the assessment.
 #'
 #' @examples
-#' # Replicate the 2017 assessment:
-#' \dontrun{
-#' fit <- FLR_SAM(stk = ple7a_stk,
-#'                idx = ple7a_idx,
+#' # Replicate the 2019 assessment:
+#' fit <- FLR_SAM(stk = ple7a_stk_2019,
+#'                idx = ple7a_idx_2019,
 #'                conf = ple7a_conf_sam)
-#' }
 #'
 "ple7a_stk"
 
 #' @rdname ple7a_stk
 "ple7a_idx"
+
+#' @rdname ple7a_stk
+"ple7a_stk_2019"
+
+#' @rdname ple7a_stk
+"ple7a_idx_2019"
 
 #' @rdname ple7a_stk
 "ple7a_conf_sam"
@@ -121,10 +126,10 @@
 #'
 #' @source \url{https://github.com/ices-eg/wg_HAWG/tree/master/NSAS}
 #'
-#' #' @examples
-#' \dontrun{
+#' @examples
 #' # NOTE: the herring SAM assessment requires a different version of
 #' # the stockassessment package
+#' \dontrun{
 #' fit <- FLR_SAM(stk = her4_stk,
 #'                idx = her4_idx,
 #'                conf = her4_conf_sam)
