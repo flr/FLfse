@@ -210,3 +210,33 @@
 "her4_conf_sam"
 
 
+#' Northeast Atlantic mackerel 2019
+#'
+#' Mackerel  (\emph{Scomber  scombrus}) in subareas 1-8 and 14, and in
+#' Division 9.a (the Northeast Atlantic and adjacent waters).
+#' Assessment input data for Northeast Atlantic mackerel as used by ICES WGWIDE
+#' 2019. Includes the stock, the indices and the SAM configuration.
+#'
+#' \code{mac.27.nea_stk_2019} includes tagging data, stored as an attribute in
+#' \code{attr(catch.n(mac.27.nea_stk_2019), "recap")}. An additional tagging
+#' configuration is stored in
+#' \code{attr(catch.n(mac.27.nea_stk_2019), "recap_conf")}.
+#' Also, weights for the catch numbers are supplied as an attribute in
+#' \code{attr(catch.n(mac.27.nea_stk_2019), "weight")}. All additional data is
+#' passed on automatically to the SAM assessment.
+#'
+#' @examples
+#' # The 2019 WGWIDE Northeast Atlantic mackerel assessment can be reproduced
+#' # with:
+#' fit <- FLR_SAM(stk = mac.27.nea_stk_2019,
+#'                idx = mac.27.nea_idx_2019,
+#'                conf = mac.27.nea_conf_2019)
+#'
+#' @source \url{https://www.stockassessment.org}
+"mac.27.nea_stk_2019"
+
+#' @rdname mac.27.nea_stk_2019
+"mac.27.nea_idx_2019"
+
+#' @rdname mac.27.nea_stk_2019
+"mac.27.nea_conf_2019"
