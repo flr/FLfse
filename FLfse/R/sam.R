@@ -20,6 +20,212 @@ matrix2FLQuant <- function(input) {
   FLQuant(t(input), dimnames = dims_qnt)
 }
 
+### function for running SAM
+### runs inside FLR_SAM_run
+FLR_SAM_iter <- function(stk, idx, conf, par_ini, i, NA_rm, conf_full, ...) {
+
+  ### subset stock and index to current iter
+  stk_i <- FLCore::iter(stk, i)
+  idx_i <- lapply(idx, FLCore::iter, i)
+  par_i <- par_ini[[i]]
+
+  ### calculate landings fraction
+  lf <- landings.n(stk_i) / catch.n(stk_i)
+  ### assume only landings if NA
+  lf[is.na(lf) | is.infinite(lf)] <- 1
+
+  ### do some sanity checks ...
+  ### fill empty landings/discards weights
+
+  ### create SAM input objects
+  dat_lst <- list(residual.fleet = catch.n(stk_i),
+                  prop.mature = mat(stk_i),
+                  stock.mean.weight = stock.wt(stk_i),
+                  catch.mean.weight = catch.wt(stk_i),
+                  dis.mean.weight = discards.wt(stk_i),
+                  land.mean.weight = landings.wt(stk_i),
+                  natural.mortality = m(stk_i),
+                  prop.f = harvest.spwn(stk_i),
+                  prop.m = m.spwn(stk_i),
+                  land.frac = lf)
+
+  ### reduce dimensions, keep only age & year
+  dat_lst <- lapply(dat_lst, function(x) {
+    x[, drop = TRUE]
+  })
+
+
+  ### transpose matrix (required for SAM)
+  dat_lst <- lapply(dat_lst, t)
+
+  ### remove trailing years which contain only NAs
+  ### otherwise SAM will complain
+  if (isTRUE(NA_rm)) {
+
+    dat_lst <- lapply(dat_lst, function(x) {
+      ### find rows/years with NAs
+      years_NA <- apply(x, 1, function(y) {
+        all(is.na(y))
+      })
+      ### check if last year contains only NAs, if yes, find length of sequence
+      if (isTRUE(c(tail(years_NA, 1), use.names = FALSE))) {
+        ### length of TRUE/FALSE sequences
+        seq_lngth <- rle(years_NA)
+        ### length of last TRUE sequence
+        lngth_NA <- as.vector(tail(seq_lngth$lengths, 1))
+        ### find positions for corresponding years
+        pos_remove <- which(rownames(x) == tail(rownames(x), lngth_NA))
+        x <- x[-pos_remove, ]
+      }
+      return(x)
+    })
+    ### trim years of land.frac to dimension of catch
+    ### (after removing trailing NAs)
+    ### otherwise, weird things happen when a forecast is performed...
+    if (any(dim(dat_lst$residual.fleet) != dim(dat_lst$land.frac))) {
+      dat_lst$land.frac <- dat_lst$land.frac[seq(nrow(dat_lst$residual.fleet)),]
+    }
+
+  }
+
+  ### extract indices
+  dat_idx <- lapply(idx_i, function(x){
+    ### extract index slot
+    tmp <- index(x)
+    ### get dims
+    tmp_dim <- dim(tmp)
+    tmp_dimnames <- dimnames(tmp)
+    ### coerce into array, drop all dimensions apart from age/year
+    tmp <- array(data = tmp, dim = tmp_dim[1:2], dimnames = tmp_dimnames[1:2])
+    ### transpose
+    tmp <- t(tmp)
+    ### change age description for ssb/biomass surveys
+    if (dim(tmp)[2] == 1) {
+      if (!grepl(x = dimnames(tmp)[[2]],
+                 pattern = "^[0-9]+$") | ### non numeric age
+          is.na(dimnames(tmp)[[2]]) | ### NA as age
+          dimnames(tmp)[[2]] == -1) {
+        dimnames(tmp)[[2]] <- -1 ### recognized by SAM as SSB index
+      }
+    }
+
+    ### add survey timing as attribute
+    attr(tmp, "time") <- as.vector(range(x)[c("startf", "endf")])
+
+    return(tmp)
+  })
+  ### add partial attribute "part" to surveys, e.g. used for herring
+  part_n <- which(sapply(idx_i, type) == "partial")
+  if (length(part_n) > 1) {
+    for (idx_i_i in part_n) {
+      attr(dat_idx[[idx_i_i]], "part") <- as.vector(which(part_n == idx_i_i))
+    }
+  }
+
+  ### add indices to input list
+  dat_lst$surveys <- dat_idx
+
+  ### create SAM input object
+  dat_sam <- do.call(stockassessment::setup.sam.data, dat_lst)
+
+  ### create default configuration
+  conf_sam <- stockassessment::defcon(dat_sam)
+
+  ### fbar range
+  if (all(!is.na(range(stk_i)[c("minfbar", "maxfbar")]))) {
+    conf_sam$fbarRange <- range(stk_i)[c("minfbar", "maxfbar")]
+  }
+
+  ### insert configuration, if supplied to function
+  if (!is.null(conf) & !isTRUE(conf_full)) {
+
+    ### find slots that can be used
+    conf_names <- intersect(names(conf), names(conf_sam))
+
+    ### go through slot names
+    if (length(conf_names) > 0) {
+
+      for (y in conf_names) {
+
+        ### workaround for keyParScaledYA
+        ### default 0x0 matrix, needs to extended
+        if (y == "keyParScaledYA") {
+
+          conf_sam[[y]] <- conf[[y]]
+
+          ### otherwise enter only values
+        } else {
+
+          ### position where values supplied (i.e. not NA)
+          pos <- NULL ### reset from previous iteration
+          pos <- which(!is.na(conf[[y]]))
+          ### insert values
+          conf_sam[[y]][pos] <- conf[[y]][pos]
+
+        }
+
+      }
+
+    }
+
+    ### otherwise use provided configuration without ANY checking
+  } else if (isTRUE(conf_full)) {
+
+    conf_sam <- conf
+
+  }
+
+  ### define parameters for SAM if none are passed through
+  if (is.null(par_i)) {
+
+    par_i <- stockassessment::defpar(dat_sam, conf_sam)
+
+    ### check dimensions of parameters and adapt if neccessary
+  } else {
+
+    ### use stock weight to get year dimensions of data
+    n_yrs <- dim(dat_sam$stockMeanWeight)[1]
+    ### same for initial parameter values (data transposed ...)
+    n_yrs_ini <- dim(par_i$logF)[2]
+
+    ### if dimensions differ,
+    ### remove redudant years at end of time series if more values provided
+    ### or replicate values from last year if values missing
+
+    ### adapt stock numbers and fishing mortality initial values
+    if (n_yrs_ini < n_yrs) {
+
+      ### find missing years
+      n_missing <- n_yrs - n_yrs_ini
+      ### extend
+      par_i$logF <- par_i$logF[, c(seq(n_yrs_ini),
+                                   rep(tail(n_yrs_ini, n_missing)))]
+      par_i$logN <- par_i$logN[, c(seq(n_yrs_ini),
+                                   rep(tail(n_yrs_ini, n_missing)))]
+
+    } else if (n_yrs_ini > n_yrs) {
+
+      par_i$logF <- par_i$logF[, seq(n_yrs)]
+      par_i$logN <- par_i$logN[, seq(n_yrs)]
+
+    }
+
+  }
+
+  ### run SAM
+  sam_msg <- capture.output(
+    fit <- stockassessment::sam.fit(data = dat_sam, conf = conf_sam,
+                                    parameters = par_i,
+                                    ...))
+
+  ### save screen message(s) as attribute
+  attr(x = fit, which = "messages") <- sam_msg
+
+  ### return
+  return(fit)
+
+}
+
 ### load FLR objects and run SAM
 ### function not exported, use FLR_SAM instead
 FLR_SAM_run <- function(stk, idx, conf = NULL,
@@ -76,205 +282,11 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
   res_iter <- foreach(i = seq(dims(stk)$iter), .errorhandling = "pass",
                       .packages = c("FLCore", "stockassessment")) %do_tmp% {
 
-    ### subset stock and index to current iter
-    stk_i <- FLCore::iter(stk, i)
-    idx_i <- lapply(idx, FLCore::iter, i)
-    par_i <- par_ini[[i]]
-
-    ### calculate landings fraction
-    lf <- landings.n(stk_i) / catch.n(stk_i)
-    ### assume only landings if NA
-    lf[is.na(lf) | is.infinite(lf)] <- 1
-
-    ### do some sanity checks ...
-    ### fill empty landings/discards weights
-
-    ### create SAM input objects
-    dat_lst <- list(residual.fleet = catch.n(stk_i),
-                    prop.mature = mat(stk_i),
-                    stock.mean.weight = stock.wt(stk_i),
-                    catch.mean.weight = catch.wt(stk_i),
-                    dis.mean.weight = discards.wt(stk_i),
-                    land.mean.weight = landings.wt(stk_i),
-                    natural.mortality = m(stk_i),
-                    prop.f = harvest.spwn(stk_i),
-                    prop.m = m.spwn(stk_i),
-                    land.frac = lf)
-
-    ### reduce dimensions, keep only age & year
-    dat_lst <- lapply(dat_lst, function(x) {
-      x[, drop = TRUE]
-    })
-    ### transpose matrix (required for SAM)
-    dat_lst <- lapply(dat_lst, t)
-
-    ### remove trailing years which contain only NAs
-    ### otherwise SAM will complain
-    if(isTRUE(NA_rm)){
-
-      dat_lst <- lapply(dat_lst, function(x) {
-        ### find rows/years with NAs
-        years_NA <- apply(x, 1, function(y) {
-          all(is.na(y))
-        })
-        ### check if last year contains only NAs, if yes, find length of sequence
-        if (isTRUE(c(tail(years_NA, 1), use.names = FALSE))) {
-          ### length of TRUE/FALSE sequences
-          seq_lngth <- rle(years_NA)
-          ### length of last TRUE sequence
-          lngth_NA <- as.vector(tail(seq_lngth$lengths, 1))
-          ### find positions for corresponding years
-          pos_remove <- which(rownames(x) == tail(rownames(x), lngth_NA))
-          x <- x[-pos_remove, ]
-        }
-        return(x)
-      })
-      ### trim years of land.frac to dimension of catch
-      ### (after removing trailing NAs)
-      ### otherwise, weird things happen when a forecast is performed...
-      if (any(dim(dat_lst$residual.fleet) != dim(dat_lst$land.frac))) {
-        dat_lst$land.frac <- dat_lst$land.frac[seq(nrow(dat_lst$residual.fleet)),]
-      }
-
-    }
-
-    ### extract indices
-    dat_idx <- lapply(idx_i, function(x){
-      ### extract index slot
-      tmp <- index(x)
-      ### get dims
-      tmp_dim <- dim(tmp)
-      tmp_dimnames <- dimnames(tmp)
-      ### coerce into array, drop all dimensions apart from age/year
-      tmp <- array(data = tmp, dim = tmp_dim[1:2], dimnames = tmp_dimnames[1:2])
-      ### transpose
-      tmp <- t(tmp)
-      ### change age description for ssb/biomass surveys
-      if (dim(tmp)[2] == 1) {
-        if (!grepl(x = dimnames(tmp)[[2]],
-                   pattern = "^[0-9]+$") | ### non numeric age
-              is.na(dimnames(tmp)[[2]]) | ### NA as age
-              dimnames(tmp)[[2]] == -1) {
-          dimnames(tmp)[[2]] <- -1 ### recognized by SAM as SSB index
-        }
-      }
-
-      ### add survey timing as attribute
-      attr(tmp, "time") <- as.vector(range(x)[c("startf", "endf")])
-
-      return(tmp)
-    })
-    ### add partial attribute "part" to surveys, e.g. used for herring
-    part_n <- which(sapply(idx_i, type) == "partial")
-    if (length(part_n) > 1) {
-        for (idx_i_i in part_n) {
-          attr(dat_idx[[idx_i_i]], "part") <- as.vector(which(part_n == idx_i_i))
-        }
-    }
-
-    ### add indices to input list
-    dat_lst$surveys <- dat_idx
-
-    ### create SAM input object
-    dat_sam <- do.call(stockassessment::setup.sam.data, dat_lst)
-
-    ### create default configuration
-    conf_sam <- stockassessment::defcon(dat_sam)
-
-    ### fbar range
-    if (all(!is.na(range(stk_i)[c("minfbar", "maxfbar")]))) {
-      conf_sam$fbarRange <- range(stk_i)[c("minfbar", "maxfbar")]
-    }
-
-    ### insert configuration, if supplied to function
-    if (!is.null(conf) & !isTRUE(conf_full)) {
-
-      ### find slots that can be used
-      conf_names <- intersect(names(conf), names(conf_sam))
-
-      ### go through slot names
-      if (length(conf_names) > 0) {
-
-        for (i in conf_names) {
-
-          ### workaround for keyParScaledYA
-          ### default 0x0 matrix, needs to extended
-          if (i == "keyParScaledYA") {
-
-            conf_sam[[i]] <- conf[[i]]
-
-            ### otherwise enter only values
-          } else {
-
-            ### position where values supplied (i.e. not NA)
-            pos <- NULL ### reset from previous iteration
-            pos <- which(!is.na(conf[[i]]))
-            ### insert values
-            conf_sam[[i]][pos] <- conf[[i]][pos]
-
-          }
-
-        }
-
-      }
-
-    ### otherwise use provided configuration without ANY checking
-    } else if (isTRUE(conf_full)) {
-
-      conf_sam <- conf
-
-    }
-
-    ### define parameters for SAM if none are passed through
-    if (is.null(par_i)) {
-
-      par_i <- stockassessment::defpar(dat_sam, conf_sam)
-
-    ### check dimensions of parameters and adapt if neccessary
-    } else {
-
-      ### use stock weight to get year dimensions of data
-      n_yrs <- dim(dat_sam$stockMeanWeight)[1]
-      ### same for initial parameter values (data transposed ...)
-      n_yrs_ini <- dim(par_i$logF)[2]
-
-      ### if dimensions differ,
-      ### remove redudant years at end of time series if more values provided
-      ### or replicate values from last year if values missing
-
-      ### adapt stock numbers and fishing mortality initial values
-      if (n_yrs_ini < n_yrs) {
-
-        ### find missing years
-        n_missing <- n_yrs - n_yrs_ini
-        ### extend
-        par_i$logF <- par_i$logF[, c(seq(n_yrs_ini),
-                                     rep(tail(n_yrs_ini, n_missing)))]
-        par_i$logN <- par_i$logN[, c(seq(n_yrs_ini),
-                                     rep(tail(n_yrs_ini, n_missing)))]
-
-      } else if (n_yrs_ini > n_yrs) {
-
-        par_i$logF <- par_i$logF[, seq(n_yrs)]
-        par_i$logN <- par_i$logN[, seq(n_yrs)]
-
-      }
-
-    }
-
-    ### run SAM
-    sam_msg <- capture.output(
-      fit <- stockassessment::sam.fit(data = dat_sam, conf = conf_sam,
-                                      parameters = par_i,
-                                      ...))
-
-    ### save screen message(s) as attribute
-    attr(x = fit, which = "messages") <- sam_msg
-
-    ### return
-    return(fit)
+    FLR_SAM_iter(stk = stk, idx = idx, conf = conf, par_ini = par_ini, i = i,
+                 NA_rm = NA_rm, conf_full = conf_full)
 
   }
+
   ### set class to "sam_list"
   class(res_iter) <- "sam_list"
 
