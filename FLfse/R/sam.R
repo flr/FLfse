@@ -89,12 +89,22 @@ FLR_SAM_iter <- function(stk, idx, conf, par_ini, i, NA_rm, conf_full, ...) {
 
   ### add recapture data, if they exists
   if (!is.null(attr(catch.n(stk_i), "recap"))) {
-    dat_lst$recapture <- attr(catch.n(stk_i), "recap")
+    recap <- attr(catch.n(stk_i), "recap")
+    if (is.list(recap) & !is.data.frame(recap)) {
+      if (isTRUE(length(recap) > 1)) {
+        recap <- recap[[i]]
+      }
+    }
+    dat_lst$recapture <- recap
   }
 
   ### catch number weight
   if (!is.null(attr(catch.n(stk_i), "weight"))) {
-    cn_weight <- t(attr(catch.n(stk_i), "weight")[, drop = TRUE])
+    cn_weight <- attr(catch.n(stk_i), "weight")
+    if (isTRUE(dims(cn_weight)$iter > 1)) {
+      cn_weight <- FLCore::iter(cn_weight, i)
+    }
+    cn_weight <- t(cn_weight[, drop = TRUE])
     attr(dat_lst$residual.fleet, "weight") <- cn_weight
   }
 
