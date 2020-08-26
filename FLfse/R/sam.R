@@ -540,9 +540,9 @@ sam_to_FLStock <- function(object, ### sam object
   }
 
   ### harvest @ age
-  harvest <- exp(object$pl$logF)
+  harvest <- rbind(NA, exp(object$pl$logF))
   ### duplicate linked ages
-  harvest <- harvest[object$conf$keyLogFsta[1,] + 1, ]
+  harvest <- harvest[object$conf$keyLogFsta[1,] + 2, ]
   n_ages <- dim(harvest)[1]
   n_yrs <- dim(harvest)[2]
   harvest(stk)[1:n_ages, 1:n_yrs] <- harvest
@@ -550,8 +550,10 @@ sam_to_FLStock <- function(object, ### sam object
 
   ### add range
   if (isTRUE(uncertainty)) {
+    tmp <- rbind(NA, object$plsd$logF)
+    tmp <- tmp[object$conf$keyLogFsta[1,] + 2, ]
     harvest_sd <- qnt
-    harvest_sd[1:n_ages,1:n_yrs]<-object$plsd$logF[object$conf$keyLogFsta[1,]+1,]
+    harvest_sd[1:n_ages,1:n_yrs] <- tmp
     attr(harvest(stk), "low") <- harvest(stk) - harvest_sd * SD_mult
     attr(harvest(stk), "high") <- harvest(stk) + harvest_sd * SD_mult
   }
