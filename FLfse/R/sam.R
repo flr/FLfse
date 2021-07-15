@@ -769,7 +769,7 @@ sam_to_FLStock <- function(object, ### sam object
 
   ### set range
   ### plusgroup?
-  range(stk)["plusgroup"] <- ifelse(isTRUE(object$conf$maxAgePlusGroup == 1),
+  range(stk)["plusgroup"] <- ifelse(isTRUE(object$conf$maxAgePlusGroup[[1]] == 1),
                                     object$conf$maxAge, NA)
   ### fbar range
   range(stk)[c("minfbar", "maxfbar")] <- object$conf$fbarRange
