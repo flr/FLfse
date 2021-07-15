@@ -1231,6 +1231,7 @@ setMethod(f = "getpars",
 #' @param print_screen If set to \code{TRUE}, print output of \code{TMB::sdreport} to screen.
 #' @param idx_cov If set to \code{TRUE}, return covariance of survey index/indices.
 #' @param catch_est If set to \code{TRUE}, return catch estimates from SAM.
+#' @param seed Random number seed for reproducibility.
 
 #'
 #' @return A list of FLQuants with the elements: stock.n, harvest, catch.n, catch_sd, survey_catchability, survey_sd, survey_cov, proc_error.

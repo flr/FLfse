@@ -31,6 +31,8 @@ SAM_uncertainty(
 
 \item{print_screen}{If set to \code{TRUE}, print output of \code{TMB::sdreport} to screen.}
 
+\item{seed}{Random number seed for reproducibility.}
+
 \item{idx_cov}{If set to \code{TRUE}, return covariance of survey index/indices.}
 
 \item{catch_est}{If set to \code{TRUE}, return catch estimates from SAM.}
