@@ -8,14 +8,17 @@ Authors@R: c(
   person("Sven", "Kupschus", role = "aut"))
 Maintainer: Simon Fischer <simon.fischer@cefas.co.uk>
 Description: Fisheries Sampling Evaluation in FLR.
-    Evaluate the effect of fisheries sampling design on various stock assessment
-    methods. Currently it includes SAM and SPiCT.
+    A package to interface betwen the SAM stock assessments and FLR, and aid the
+    inclusion of SAM into Management Strategy Evaluation (MSE), including the
+    set up of operating models mimicking SAM.
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
 Imports:
     methods,
     foreach,
+    stats,
+    utils,
     FLCore (>= 2.6.5)
 Depends:
 Suggests: 
@@ -23,6 +26,5 @@ Suggests:
     stockassessment (>= 0.9.0),
     TMB,
     mgcv,
-    FLXSA (>= 2.6.0),
     doParallel
-RoxygenNote: 7.1.0
+RoxygenNote: 7.1.1

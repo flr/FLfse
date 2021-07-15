@@ -14,3 +14,7 @@ NULL
 ### import foreach package
 #' @import foreach
 NULL
+
+### import functions from stats
+#' @importFrom stats complete.cases plogis
+NULL

@@ -14,7 +14,12 @@ SAM2FLStock(
   uncertainty = FALSE,
   conf_level = 95,
   catch_estimate = FALSE,
-  correct_catch = FALSE
+  correct_catch = FALSE,
+  mat_est = FALSE,
+  stock.wt_est = FALSE,
+  catch.wt_est = FALSE,
+  m_est = FALSE,
+  spinoutyear = FALSE
 )
 
 \S4method{SAM2FLStock}{sam,missing}(
@@ -23,7 +28,12 @@ SAM2FLStock(
   uncertainty = FALSE,
   conf_level = 95,
   catch_estimate = FALSE,
-  correct_catch = FALSE
+  correct_catch = FALSE,
+  mat_est = FALSE,
+  stock.wt_est = FALSE,
+  catch.wt_est = FALSE,
+  m_est = FALSE,
+  spinoutyear = FALSE
 )
 
 \S4method{SAM2FLStock}{sam_list,missing}(
@@ -32,7 +42,12 @@ SAM2FLStock(
   uncertainty = FALSE,
   conf_level = 95,
   catch_estimate = FALSE,
-  correct_catch = FALSE
+  correct_catch = FALSE,
+  mat_est = FALSE,
+  stock.wt_est = FALSE,
+  catch.wt_est = FALSE,
+  m_est = FALSE,
+  spinoutyear = FALSE
 )
 
 \S4method{SAM2FLStock}{sam,FLStock}(
@@ -41,7 +56,12 @@ SAM2FLStock(
   uncertainty = FALSE,
   conf_level = 95,
   catch_estimate = FALSE,
-  correct_catch = FALSE
+  correct_catch = FALSE,
+  mat_est = FALSE,
+  stock.wt_est = FALSE,
+  catch.wt_est = FALSE,
+  m_est = FALSE,
+  spinoutyear = FALSE
 )
 
 \S4method{SAM2FLStock}{sam_list,FLStock}(
@@ -50,7 +70,12 @@ SAM2FLStock(
   uncertainty = FALSE,
   conf_level = 95,
   catch_estimate = FALSE,
-  correct_catch = FALSE
+  correct_catch = FALSE,
+  mat_est = FALSE,
+  stock.wt_est = FALSE,
+  catch.wt_est = FALSE,
+  m_est = FALSE,
+  spinoutyear = FALSE
 )
 }
 \arguments{
@@ -67,11 +92,20 @@ SAM will be added as attribute.}
 \item{conf_level}{Confidence level used when uncertainty is returned.
 Defaults to 95 (percent).}
 
-\item{catch_estimate}{If set to \code{TRUE}, the catch estimated by SAM will
-be returned instead of the model input.}
+\item{catch_estimate}{Logical, return the catch estimated by SAM instead of the model input?}
 
-\item{correct_catch}{If set to \code{TRUE}, returned catch are correct by
-catch multiplier estimated by SAM.}
+\item{correct_catch}{Logical, correct catch with
+catch multiplier estimated by SAM?}
+
+\item{mat_est}{Logical, return SAM estimates for maturity?}
+
+\item{stock.wt_est}{Logical, return SAM estimates for stock weights?}
+
+\item{catch.wt_est}{Logical, return SAM estimates for catch weights?}
+
+\item{m_est}{Logical, return SAM estimates for natural mortality?}
+
+\item{spinoutyear}{Logical, return SAM estimates of biological estimates beyond last data year?}
 }
 \value{
 An object of class \code{FLStock}.
@@ -81,13 +115,11 @@ This function takes the output from running the SAM stockassessment and
 converts them into an \code{FLStock} object.
 }
 \details{
-If an \code{FLStock} is provided as \code{stk} argument, then only the
-following slots are updated: \code{stock}, \code{stock.n} & \code{harvest},
-and, if requested by \code{catch_estimate = TRUE}, \code{catch},
-\code{catch.n}, \code{landings}, \code{landings.n}, \code{discards},
-\code{discards.n} with model estimates. If the dimensions
-(years, iterations) differ between the SAM results and the provided stock
-template, the returned \code{FLStock} is expanded.
+\code{SAM2FLStock} returns both the input data used for running SAM (e.g. catch) and the model estimates (stock numbers and fishing mortality). By default, the returned catch is the input catch provided to SAM. However, the catch as estimated by SAM can be returned by setting \code{catch_estimate = TRUE}. Also, estimates of biological data (stock weights, catch weights, natural mortality, maturity) can be returned if requested and available from the model fit. Setting \code{uncertainty = TRUE} returns confidence intervals for catch, stock numbers and fishing mortality, saved as attributes in the corresponding slots of the \code{FLStock} output.
+
+If an \code{FLStock} is provided as \code{stk} argument, then this is used as template. If the dimensions (years, iterations) differ between the SAM results and the provided stock template, the returned \code{FLStock} is expanded.
+
+The \code{object} argument can either be a single SAM model fit or a list of SAM model fits (defined as class \code{sam_list}). If a list is provided, the output is an \code{FLStock} object where the different iterations correspond to the individual model fits.
 }
 \examples{
 # fit SAM to North Sea cod
