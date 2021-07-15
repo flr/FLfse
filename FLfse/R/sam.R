@@ -501,13 +501,19 @@ setMethod(f = "FLR_SAM",
 ### ------------------------------------------------------------------------ ###
 
 ### function for converting sam into FLStock
-sam_to_FLStock <- function(object, ### sam object
-                        uncertainty = FALSE, ### confidence intervals?
-                        conf_level = 95, ### confidence interval level in %
-                        catch_estimate = FALSE, ### use catch input or
-                                                ### model estimates
-                        correct_catch = FALSE, ### "correct" catch with
-                                               ### estimated multiplier
+sam_to_FLStock <- function(
+  object, ### sam object
+  uncertainty = FALSE, ### confidence intervals?
+  conf_level = 95, ### confidence interval level in %
+  catch_estimate = FALSE, ### use catch input or
+                          ## model estimates
+  correct_catch = FALSE, ### "correct" catch with
+                         ### estimated multiplier
+  mat_est = FALSE,      ### return maturity estimates?
+  stock.wt_est = FALSE, ### stock weight estimates
+  catch.wt_est = FALSE, ### stock weight estimates
+  m_est = FALSE,        ### M estimates
+  spinoutyear = FALSE, ### include spinout years for biological data?
                         ...) {
 
   ### check class type of input
@@ -519,6 +525,21 @@ sam_to_FLStock <- function(object, ### sam object
   ### get dimensions
   years <- object$data$years
   ages <- object$conf$minAge:object$conf$maxAge
+
+  ### spinout years: SAM can estimate biological parameters
+  ### - stock.wt, catch.wt, mat, M -
+  ### if this estimation is included
+  ###   - NAs are added to the data
+  ###   - estimates are provided beyond the last data year
+  ### keep these values?
+  if (isTRUE(spinoutyear)) {
+    years_spinout <- 1
+    ### if spinout years exists, they should be included in M input data
+    years_spinout <- dimnames(object$data$natMor)[[1]]
+    if (isTRUE(length(years_spinout) > length(years))) {
+      years <- sort(union(years, years_spinout))
+    }
+  }
 
   ### create FLQuant dummy
   qnt <- FLQuant(NA, dimnames = list(age = ages, year = years))
@@ -563,13 +584,30 @@ sam_to_FLStock <- function(object, ### sam object
 
   ### stock ####
   ### stock weight @ age
-  stock.wt <- t(object$data$stockMeanWeight)
-  n_ages <- dim(stock.wt)[1]
-  n_yrs <- dim(stock.wt)[2]
-  stock.wt(stk)[1:n_ages, 1:n_yrs] <- stock.wt
+  stock.wt <- object$data$stockMeanWeight
+  stock.wt <- stock.wt[complete.cases(stock.wt), ] ### remove NAs
+  stock.wt <- t(stock.wt)
+  ### select ages and years to fill
+  ### use dimnames because data in some years might be missing
+  c_ages <- intersect(dimnames(stock.wt)[[1]], dimnames(stock.wt(stk))$age)
+  c_yrs <- intersect(dimnames(stock.wt)[[2]], dimnames(stock.wt(stk))$year)
+  stock.wt(stk)[c_ages, c_yrs] <- stock.wt[c_ages, c_yrs]
+  ### replace stock weights with SAM estimates?
+  if (isTRUE(stock.wt_est)) {
+    stock.wt <- exp(object$pl$logSW)
+    if (all(dim(stock.wt) == 0)) {
+      warning("stock.wt estimates requested but not available")
+    } else {
+      stock.wt <- stock.wt[complete.cases(stock.wt), ]
+      stock.wt <- t(stock.wt)
+      n_ages <- min(dim(stock.wt)[1], dim(stock.wt(stk))[1])
+      n_yrs <- min(dim(stock.wt)[2], dim(stock.wt(stk))[2])
+      stock.wt(stk)[1:n_ages, 1:n_yrs] <- stock.wt[1:n_ages, 1:n_yrs]
+    }
+  }
   ### stock biomass
   stock <- quantSums(qnt)
-  stock[, 1:n_yrs] <- exp(object$sdrep$value[names(object$sdrep$value) == "logtsb"])
+  stock[, c_yrs] <- exp(object$sdrep$value[names(object$sdrep$value) == "logtsb"])
   stock(stk) <- stock
 
   ### add range
@@ -584,13 +622,29 @@ sam_to_FLStock <- function(object, ### sam object
   ### catch ####
   ### catch weight @ age
   if (isTRUE(length(dim(object$data$catchMeanWeight)) == 3)) {
-    catch.wt <- t(object$data$catchMeanWeight[,,, drop = TRUE])
+    catch.wt <- object$data$catchMeanWeight[,,, drop = TRUE]
   } else {
-    catch.wt <- t(object$data$catchMeanWeight)
+    catch.wt <- object$data$catchMeanWeight
   }
-  n_ages <- dim(catch.wt)[1]
-  n_yrs <- dim(catch.wt)[2]
-  catch.wt(stk)[1:n_ages, 1:n_yrs] <- catch.wt
+  catch.wt <- catch.wt[complete.cases(catch.wt), ] ### remove NAs
+  catch.wt <- t(catch.wt)
+  ### use dimnames because data in some years might be missing
+  c_ages <- intersect(dimnames(catch.wt)[[1]], dimnames(catch.wt(stk))$age)
+  c_yrs <- intersect(dimnames(catch.wt)[[2]], dimnames(catch.wt(stk))$year)
+  catch.wt(stk)[c_ages, c_yrs] <- catch.wt[c_ages, c_yrs]
+  ### replace catch weights with SAM estimates?
+  if (isTRUE(catch.wt_est)) {
+    catch.wt <- exp(object$pl$logCW)
+    if (all(dim(catch.wt) == 0)) {
+      warning("catch.wt estimates requested but not available")
+    } else {
+      catch.wt <- catch.wt[complete.cases(catch.wt), ]
+      catch.wt <- t(catch.wt)
+      n_ages <- min(dim(catch.wt)[1], dim(catch.wt(stk))[1])
+      n_yrs <- min(dim(catch.wt)[2], dim(catch.wt(stk))[2])
+      catch.wt(stk)[1:n_ages, 1:n_yrs] <- catch.wt[1:n_ages, 1:n_yrs]
+    }
+  }
   ### catch numbers @ age
   catch_fleets <- which(object$data$fleetTypes == 0)
   ### extract observations & estimates
@@ -626,43 +680,46 @@ sam_to_FLStock <- function(object, ### sam object
 
     ### warn if no catch multiplier available
     if (!(length(object$pl$logScale) > 1)) {
+
       warning("catch correction requested but no catch multiplier estimated")
+
+    } else {
+
+      ### get catch multiplier dimensions
+      ages_mult <- object$conf$minAge:object$conf$maxAge
+      yrs_mult <- object$conf$keyScaledYears
+      ### create catch multiplier FLQuant
+      catch_mult_data <- FLQuant(
+        matrix(data = object$pl$logScale[(object$conf$keyParScaledYA + 1)],
+               ncol = object$conf$noScaledYears,
+               nrow = length(object$conf$minAge:object$conf$maxAge),
+               byrow = TRUE),
+        dimnames = list(year = object$conf$keyScaledYears,
+                        age = object$conf$minAge:object$conf$maxAge))
+      ### model values in log scale, exponentiate
+      catch_mult_data <- exp(catch_mult_data)
+      ### for simpler calculations, expand dimensions for stock
+      catch_mult <- catch.n(stk) %=% 1
+      catch_mult[ac(ages_mult), ac(yrs_mult)] <- catch_mult_data
+
+      ### correct catch.n
+      catch.n(stk) <- catch.n(stk) * catch_mult
+      # ### split into landings and discards, based on landing fraction
+      # ### done later
+      # land_frac <- landings.n(stk) / catch.n(stk)
+      # landings.n(stk) <- catch.n(stk) * land_frac
+      # discards.n(stk) <- catch.n(stk) * (1 - land_frac)
+      # ### update stock
+      # catch(stk) <- computeCatch(stk)
+      # landings(stk) <- computeLandings(stk)
+      # discards(stk)<- computeDiscards(stk)
+
+      # ### catch biomass
+      # catch <- quantSums(qnt)
+      # catch[, 1:n_yrs] <- exp(object$sdrep$value[names(object$sdrep$value) ==
+      #                                              "logCatch"])
+      # catch(stk) <- catch
     }
-
-    ### get catch multiplier dimensions
-    ages_mult <- object$conf$minAge:object$conf$maxAge
-    yrs_mult <- object$conf$keyScaledYears
-    ### create catch multiplier FLQuant
-    catch_mult_data <- FLQuant(
-      matrix(data = object$pl$logScale[(object$conf$keyParScaledYA + 1)],
-             ncol = object$conf$noScaledYears,
-             nrow = length(object$conf$minAge:object$conf$maxAge),
-             byrow = TRUE),
-      dimnames = list(year = object$conf$keyScaledYears,
-                      age = object$conf$minAge:object$conf$maxAge))
-    ### model values in log scale, exponentiate
-    catch_mult_data <- exp(catch_mult_data)
-    ### for simpler calculations, expand dimensions for stock
-    catch_mult <- catch.n(stk) %=% 1
-    catch_mult[ac(ages_mult), ac(yrs_mult)] <- catch_mult_data
-
-    ### correct catch.n
-    catch.n(stk) <- catch.n(stk) * catch_mult
-    # ### split into landings and discards, based on landing fraction
-    # ### done later
-    # land_frac <- landings.n(stk) / catch.n(stk)
-    # landings.n(stk) <- catch.n(stk) * land_frac
-    # discards.n(stk) <- catch.n(stk) * (1 - land_frac)
-    # ### update stock
-    # catch(stk) <- computeCatch(stk)
-    # landings(stk) <- computeLandings(stk)
-    # discards(stk)<- computeDiscards(stk)
-
-    # ### catch biomass
-    # catch <- quantSums(qnt)
-    # catch[, 1:n_yrs] <- exp(object$sdrep$value[names(object$sdrep$value) ==
-    #                                              "logCatch"])
-    # catch(stk) <- catch
 
   }
 
@@ -736,18 +793,57 @@ sam_to_FLStock <- function(object, ### sam object
     attr(discards(stk), "high") <- attr(catch(stk), "high") * (1 - lfrac_qnt_sum)
   }
 
+  ### ---------------------------------------------------------------------- ###
   ### natural mortality
-  m <- t(object$data$natMor)
-  n_ages <- dim(m)[1]
-  n_yrs <- dim(m)[2]
-  m(stk)[1:n_ages, 1:n_yrs] <- m
 
-  ### maturity ogive
-  mat <- t(object$data$propMat)
-  n_ages <- dim(mat)[1]
-  n_yrs <- dim(mat)[2]
-  mat(stk)[1:n_ages, 1:n_yrs] <- mat
+  m <- object$data$natMor
+  m <- m[complete.cases(m), ]
+  m <- t(m)
+  ### use dimnames because data in some years might be missing
+  c_ages <- intersect(dimnames(m)[[1]], dimnames(m(stk))$age)
+  c_yrs <- intersect(dimnames(m)[[2]], dimnames(m(stk))$year)
+  m(stk)[c_ages, c_yrs] <- m[c_ages, c_yrs]
+  ### replace with SAM estimates?
+  if (isTRUE(m_est)) {
+    m <- exp(object$pl$logNM)
+    if (all(dim(m) == 0)) {
+      warning("mat estimates requested but not available")
+    } else {
+      m <- m[complete.cases(m), ]
+      m <- t(m)
+      ### use matrix indices because SAM estimates do not have dimnames
+      n_ages <- min(dim(m)[1], dim(m(stk))[1])
+      n_yrs <- min(dim(m)[2], dim(m(stk))[2])
+      m(stk)[1:n_ages, 1:n_yrs] <- m[1:n_ages, 1:n_yrs]
+    }
+  }
 
+  ### ---------------------------------------------------------------------- ###
+  ### maturity ogive ####
+
+  mat <- object$data$propMat
+  mat <- mat[complete.cases(mat), ]
+  mat <- t(mat)
+  ### use dimnames because data in some years might be missing
+  c_ages <- intersect(dimnames(mat)[[1]], dimnames(mat(stk))$age)
+  c_yrs <- intersect(dimnames(mat)[[2]], dimnames(mat(stk))$year)
+  mat(stk)[c_ages, c_yrs] <- mat[c_ages, c_yrs]
+  ### replace with SAM estimates?
+  if (isTRUE(mat_est)) {
+    mat <- plogis(object$pl$logitMO)
+    if (all(dim(mat) == 0)) {
+      warning("mat estimates requested but not available")
+    } else {
+      mat <- mat[complete.cases(mat), ]
+      mat <- t(mat)
+      ### use matrix indices because SAM estimates do not have dimnames
+      n_ages <- min(dim(mat)[1], dim(mat(stk))[1])
+      n_yrs <- min(dim(mat)[2], dim(mat(stk))[2])
+      mat(stk)[1:n_ages, 1:n_yrs] <- mat[1:n_ages, 1:n_yrs]
+    }
+  }
+
+  ### ---------------------------------------------------------------------- ###
   ### proportion of F before spawning
   if (isTRUE(length(dim(object$data$propF)) == 3)) {
     harvest.spwn <- t(object$data$propF[,,, drop = TRUE])
@@ -758,15 +854,18 @@ sam_to_FLStock <- function(object, ### sam object
   n_yrs <- dim(harvest.spwn)[2]
   harvest.spwn(stk)[1:n_ages, 1:n_yrs] <- harvest.spwn
 
+  ### ---------------------------------------------------------------------- ###
   ### proportion of M before spawning
   m.spwn <- t(object$data$propM)
   n_ages <- dim(m.spwn)[1]
   n_yrs <- dim(m.spwn)[2]
   m.spwn(stk)[1:n_ages, 1:n_yrs] <- m.spwn
 
+  ### ---------------------------------------------------------------------- ###
   ### set description
   desc(stk) <- "FLStock created from SAM model fit"
 
+  ### ---------------------------------------------------------------------- ###
   ### set range
   ### plusgroup?
   range(stk)["plusgroup"] <- ifelse(isTRUE(object$conf$maxAgePlusGroup[[1]] == 1),
@@ -774,6 +873,7 @@ sam_to_FLStock <- function(object, ### sam object
   ### fbar range
   range(stk)[c("minfbar", "maxfbar")] <- object$conf$fbarRange
 
+  ### ---------------------------------------------------------------------- ###
   ### return FLStock
   return(stk)
 
@@ -849,13 +949,11 @@ setOldClass("sam_list")
 #' This function takes the output from running the SAM stockassessment and
 #' converts them into an \code{FLStock} object.
 #'
-#' If an \code{FLStock} is provided as \code{stk} argument, then only the
-#' following slots are updated: \code{stock}, \code{stock.n} & \code{harvest},
-#' and, if requested by \code{catch_estimate = TRUE}, \code{catch},
-#' \code{catch.n}, \code{landings}, \code{landings.n}, \code{discards},
-#' \code{discards.n} with model estimates. If the dimensions
-#' (years, iterations) differ between the SAM results and the provided stock
-#' template, the returned \code{FLStock} is expanded.
+#' \code{SAM2FLStock} returns both the input data used for running SAM (e.g. catch) and the model estimates (stock numbers and fishing mortality). By default, the returned catch is the input catch provided to SAM. However, the catch as estimated by SAM can be returned by setting \code{catch_estimate = TRUE}. Also, estimates of biological data (stock weights, catch weights, natural mortality, maturity) can be returned if requested and available from the model fit. Setting \code{uncertainty = TRUE} returns confidence intervals for catch, stock numbers and fishing mortality, saved as attributes in the corresponding slots of the \code{FLStock} output.
+#'
+#' If an \code{FLStock} is provided as \code{stk} argument, then this is used as template. If the dimensions (years, iterations) differ between the SAM results and the provided stock template, the returned \code{FLStock} is expanded.
+#'
+#' The \code{object} argument can either be a single SAM model fit or a list of SAM model fits (defined as class \code{sam_list}). If a list is provided, the output is an \code{FLStock} object where the different iterations correspond to the individual model fits.
 #'
 #'
 #' @param object Object of class \code{sam} with the results from a
@@ -867,10 +965,14 @@ setOldClass("sam_list")
 #' SAM will be added as attribute.
 #' @param conf_level Confidence level used when uncertainty is returned.
 #'   Defaults to 95 (percent).
-#' @param catch_estimate If set to \code{TRUE}, the catch estimated by SAM will
-#' be returned instead of the model input.
-#' @param correct_catch If set to \code{TRUE}, returned catch are correct by
-#'   catch multiplier estimated by SAM.
+#' @param catch_estimate Logical, return the catch estimated by SAM instead of the model input?
+#' @param correct_catch Logical, correct catch with
+#'   catch multiplier estimated by SAM?
+#' @param mat_est Logical, return SAM estimates for maturity?
+#' @param stock.wt_est Logical, return SAM estimates for stock weights?
+#' @param catch.wt_est Logical, return SAM estimates for catch weights?
+#' @param m_est Logical, return SAM estimates for natural mortality?
+#' @param spinoutyear Logical, return SAM estimates of biological estimates beyond last data year?
 #'
 #' @return An object of class \code{FLStock}.
 #'
@@ -886,9 +988,13 @@ setOldClass("sam_list")
 #'
 #' @export
 
-setGeneric("SAM2FLStock", function(object, stk, uncertainty = FALSE,
-                                   conf_level = 95, catch_estimate = FALSE,
-                                   correct_catch = FALSE) {
+setGeneric("SAM2FLStock",
+           function(object, stk, uncertainty = FALSE,
+                    conf_level = 95, catch_estimate = FALSE,
+                    correct_catch = FALSE,
+                    mat_est = FALSE, stock.wt_est = FALSE,
+                    catch.wt_est = FALSE, m_est = FALSE,
+                    spinoutyear = FALSE) {
   standardGeneric("SAM2FLStock")
 })
 
@@ -898,13 +1004,18 @@ setMethod(f = "SAM2FLStock",
           signature = signature(object = "sam", stk = "missing"),
           definition = function(object, stk, uncertainty = FALSE,
                                 conf_level = 95, catch_estimate = FALSE,
-                                correct_catch = FALSE) {
+                                correct_catch = FALSE,
+                                mat_est = FALSE, stock.wt_est = FALSE,
+                                catch.wt_est = FALSE, m_est = FALSE,
+                                spinoutyear = FALSE) {
 
     sam_to_FLStock(object = object, stk = stk, uncertainty = uncertainty,
                    conf_level = conf_level, catch_estimate = catch_estimate,
-                   correct_catch = correct_catch)
+                   correct_catch = correct_catch, mat_est = mat_est,
+                   stock.wt_est = stock.wt_est, catch.wt_est = catch.wt_est,
+                   m_est = m_est, spinoutyear = spinoutyear)
 
-  })
+})
 
 ### object = sam_list, stk = missing
 #' @rdname SAM2FLStock
@@ -912,14 +1023,19 @@ setMethod(f = "SAM2FLStock",
           signature = signature(object = "sam_list", stk = "missing"),
           definition = function(object, stk, uncertainty = FALSE,
                                 conf_level = 95, catch_estimate = FALSE,
-                                correct_catch = FALSE) {
+                                correct_catch = FALSE,
+                                mat_est = FALSE, stock.wt_est = FALSE,
+                                catch.wt_est = FALSE, m_est = FALSE,
+                                spinoutyear = FALSE) {
 
     sam_list_to_FLStock(object = object, stk = stk, uncertainty = uncertainty,
                         conf_level = conf_level,
                         catch_estimate = catch_estimate,
-                        correct_catch = correct_catch)
+                        correct_catch = correct_catch, mat_est = mat_est,
+                        stock.wt_est = stock.wt_est, catch.wt_est = catch.wt_est,
+                        m_est = m_est, spinoutyear = spinoutyear)
 
-  })
+})
 
 ### object = sam, stk = FLStock
 #' @rdname SAM2FLStock
@@ -927,14 +1043,22 @@ setMethod(f = "SAM2FLStock",
           signature = signature(object = "sam", stk = "FLStock"),
           definition = function(object, stk, uncertainty = FALSE,
                                 conf_level = 95, catch_estimate = FALSE,
-                                correct_catch = FALSE) {
+                                correct_catch = FALSE,
+                                mat_est = FALSE, stock.wt_est = FALSE,
+                                catch.wt_est = FALSE, m_est = FALSE,
+                                spinoutyear = FALSE) {
 
   ### coerce SAM into FLStock
   stk_new <- sam_to_FLStock(object = object, stk = stk,
                             uncertainty = uncertainty,
                             conf_level = conf_level,
                             catch_estimate = catch_estimate,
-                            correct_catch = correct_catch)
+                            correct_catch = correct_catch,
+                            mat_est = mat_est,
+                            stock.wt_est = stock.wt_est,
+                            catch.wt_est = catch.wt_est,
+                            m_est = m_est,
+                            spinoutyear = spinoutyear)
 
   ### adapt dimensions
   stks <- adapt_dims(stk, stk_new, fill.iter = TRUE)
@@ -943,23 +1067,9 @@ setMethod(f = "SAM2FLStock",
   stk_new <- stks[[2]]
 
   ### insert values
-  stock(stk) <- stock(stk_new)
-  stock.n(stk) <- stock.n(stk_new)
-  harvest(stk) <- harvest(stk_new)
+  stk[] <- stk_new
 
-  ### update catch, if requested
-  if (isTRUE(catch_estimate) | isTRUE(correct_catch)) {
-
-    catch(stk) <- catch(stk_new)
-    catch.n(stk) <- catch.n(stk_new)
-    landings(stk) <- landings(stk_new)
-    landings.n(stk) <- landings.n(stk_new)
-    discards(stk) <- discards(stk_new)
-    discards.n(stk) <- discards.n(stk_new)
-
-  }
-
-  ### return input stock, updated wit requested data
+  ### return input stock, updated with requested data
   return(stk)
 
 })
@@ -970,14 +1080,22 @@ setMethod(f = "SAM2FLStock",
           signature = signature(object = "sam_list", stk = "FLStock"),
           definition = function(object, stk, uncertainty = FALSE,
                                 conf_level = 95, catch_estimate = FALSE,
-                                correct_catch = FALSE) {
+                                correct_catch = FALSE,
+                                mat_est = FALSE, stock.wt_est = FALSE,
+                                catch.wt_est = FALSE, m_est = FALSE,
+                                spinoutyear = FALSE) {
 
   ### coerce SAM into FLStock
   stk_new <- sam_list_to_FLStock(object = object, stk = stk,
                                  uncertainty = uncertainty,
                                  conf_level = conf_level,
                                  catch_estimate = catch_estimate,
-                                 correct_catch = correct_catch)
+                                 correct_catch = correct_catch,
+                                 mat_est = mat_est,
+                                 stock.wt_est = stock.wt_est,
+                                 catch.wt_est = catch.wt_est,
+                                 m_est = m_est,
+                                 spinoutyear = spinoutyear)
 
   ### adapt dimensions
   stks <- adapt_dims(stk, stk_new, fill.iter = TRUE)
@@ -986,23 +1104,9 @@ setMethod(f = "SAM2FLStock",
   stk_new <- stks[[2]]
 
   ### insert values
-  stock(stk) <- stock(stk_new)
-  stock.n(stk) <- stock.n(stk_new)
-  harvest(stk) <- harvest(stk_new)
+  stk[] <- stk_new
 
-  ### update catch, if requested
-  if (isTRUE(catch_estimate) | isTRUE(correct_catch)) {
-
-    catch(stk) <- catch(stk_new)
-    catch.n(stk) <- catch.n(stk_new)
-    landings(stk) <- landings(stk_new)
-    landings.n(stk) <- landings.n(stk_new)
-    discards(stk) <- discards(stk_new)
-    discards.n(stk) <- discards.n(stk_new)
-
-  }
-
-  ### return input stock, updated wit requested data
+  ### return input stock, updated with requested data
   return(stk)
 
 })
