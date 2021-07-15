@@ -1200,16 +1200,19 @@ setMethod(f = "getpars",
 #'
 #' The following metrics are returned:
 #' \itemize{
-#'   \item{\code{stock.n}} Stock numbers at age for all years,
-#'                         \code{FLQuant}
+#'   \item{\code{stock.n}} Stock numbers at age for all years, \code{FLQuant}
 #'   \item{\code{harvest}} Fishing mortalities at age for all years,
-#'                         \code{FLQuant}
-#'   \item{\code{survey_catchability}} Catchability at age for all years for all
-#'                                     survey indices, list of \code{FLQuant}s
+#'     \code{FLQuant}
+#'   \item{\code{catch.n}} Estimates of catch numbers at age for all years. This
+#'     differs from the assessment input values. If the SAM model fit contains
+#'     catch multipliers, the values returned here are corrected for this.
+#'     Class \code{FLQuant}.
 #'   \item{\code{catch_sd}} Standard deviation of the catch numbers at age,
-#'                          time invariant, \code{FLQuant}
+#'     time invariant, \code{FLQuant}
+#'   \item{\code{survey_catchability}} Catchability at age for all years for all
+#'     survey indices, list of \code{FLQuant}s
 #'   \item{\code{survey_sd}} Standard deviation of all surveys at age, time
-#'                           invariant, list of \code{FLQuants},
+#'     invariant, list of \code{FLQuants},
 #'   \item{\code{survey_cov}} Covariance matrices of survey ages, one for each
 #'     survey. Return object is a list of lists, the first level corresponds to
 #'     the replicates, the second level to the surveys. If no covariance
@@ -1220,10 +1223,6 @@ setMethod(f = "getpars",
 #'     time invariant, class \code{FLQuant}. This corresponds to the survival
 #'     process error assumed/estimated, i.e. quantifies how much the actual
 #'     stock numbers at age deviate from the deterministic catch equation.
-#'   \item{\code{catch_n}} Estimates of catch numbers at age for all years. This
-#'     differs from the assessment input values. If the SAM model fit contains
-#'     catch multipliers, the values returned here are corrected for this.
-#'     Class \code{FLQuant}.
 #' }
 #'
 #'
@@ -1234,19 +1233,22 @@ setMethod(f = "getpars",
 #' @param catch_est If set to \code{TRUE}, return catch estimates from SAM.
 
 #'
-#' @return A list of FLQuants with the elements: stock.n, harvest,
-#'   survey_catchability, catch_sd, survey_sd, survey_cov, proc_error, catch_n.
+#' @return A list of FLQuants with the elements: stock.n, harvest, catch.n, catch_sd, survey_catchability, survey_sd, survey_cov, proc_error.
 #'
 #' @examples
 #' ### fit SAM to North Sea cod
 #' fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
 #'
 #' ### create 2 replicates
-#' reps <- SAM_uncertainty(fit, n = 2, idx_cov = TRUE, catch_est = TRUE)
+#' reps <- SAM_uncertainty(fit, n = 2)
 #' @export
 
-setGeneric("SAM_uncertainty", function(fit, n = 1000, print_screen = FALSE,
-                                       idx_cov = FALSE, catch_est = FALSE) {
+setGeneric("SAM_uncertainty", function(fit,
+                                       n = 1000,
+                                       print_screen = FALSE,
+                                       seed = NULL,
+                                       idx_cov = TRUE,
+                                       catch_est = TRUE) {
   standardGeneric("SAM_uncertainty")
 })
 
@@ -1254,8 +1256,12 @@ setGeneric("SAM_uncertainty", function(fit, n = 1000, print_screen = FALSE,
 #' @rdname SAM_uncertainty
 setMethod(f = "SAM_uncertainty",
           signature = signature(fit = "sam"),
-          definition = function(fit, n = 1000, print_screen = FALSE,
-                                idx_cov = FALSE, catch_est = FALSE) {
+          definition = function(fit,
+                                n = 1000,
+                                print_screen = FALSE,
+                                seed = NULL,
+                                idx_cov = TRUE,
+                                catch_est = TRUE) {
 
   ### check if required package is available
   if (!requireNamespace("TMB", quietly = TRUE)) {
@@ -1263,6 +1269,9 @@ setMethod(f = "SAM_uncertainty",
                "Please install it."),
          call. = FALSE)
   }
+
+    ### set random number seed?
+  if (!is.null(seed)) set.seed(seed)
 
   ### index for fishing mortality ages
   idxF <- fit$conf$keyLogFsta[1, ] + 1# +dim(stk)[1]
@@ -1297,7 +1306,7 @@ setMethod(f = "SAM_uncertainty",
   ### create random values based on estimation and covariance
   sim.states <- mvrnorm(n, est, cov) ### REPLACE with rmvnorm()
   ### matrix, columns are values, rows are requested samples
-  table(colnames(sim.states))
+  # table(colnames(sim.states))
   ### contains, among others, logF, logN...
 
   ### combine SAM estimate and random samples
@@ -1468,11 +1477,11 @@ setMethod(f = "SAM_uncertainty",
       return(tmp$est)
 
     })
-    catch_n <- FLQuant(NA,
+    catch.n <- FLQuant(NA,
                        dimnames = list(year = rownames(fit$data$catchMeanWeight),
                                        age = colnames(fit$data$catchMeanWeight),
                                        iter = seq(n)))
-    catch_n[] <- exp(res_n)
+    catch.n[] <- exp(res_n)
 
     ### apply catch multiplier, if used
     if (fit$conf$noScaledYears > 0) {
@@ -1490,24 +1499,25 @@ setMethod(f = "SAM_uncertainty",
       catch_mult_data[] <- rep(t(dat[, pos_mult]), each = length(ages_mult))
       ### model values in log scale, exponentiate
       catch_mult_data <- exp(catch_mult_data)
-      ### for simpler calculations, use catch_n as template
-      catch_mult <- catch_n %=% 1
+      ### for simpler calculations, use catch.n as template
+      catch_mult <- catch.n %=% 1
       catch_mult[ac(ages_mult), ac(yrs_mult)] <- catch_mult_data
 
       ### correct catch.n
-      catch_n <- catch_n * catch_mult
+      catch.n <- catch.n * catch_mult
 
     }
 
   } else {
 
-    catch_n <- NULL
+    catch.n <- NULL
 
   }
 
-  return(list(stock.n = stock.n, harvest = harvest,
-              survey_catchability = catchability, catch_sd = catch_sd,
+  return(list(stock.n = stock.n, harvest = harvest, catch.n = catch.n,
+              catch_sd = catch_sd,
+              survey_catchability = catchability,
               survey_sd = survey_sd, survey_cov = survey_cov,
-              proc_error = SdLogN, catch_n = catch_n))
+              proc_error = SdLogN))
 
 })

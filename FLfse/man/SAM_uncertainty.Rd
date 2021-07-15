@@ -10,16 +10,18 @@ SAM_uncertainty(
   fit,
   n = 1000,
   print_screen = FALSE,
-  idx_cov = FALSE,
-  catch_est = FALSE
+  seed = NULL,
+  idx_cov = TRUE,
+  catch_est = TRUE
 )
 
 \S4method{SAM_uncertainty}{sam}(
   fit,
   n = 1000,
   print_screen = FALSE,
-  idx_cov = FALSE,
-  catch_est = FALSE
+  seed = NULL,
+  idx_cov = TRUE,
+  catch_est = TRUE
 )
 }
 \arguments{
@@ -34,8 +36,7 @@ SAM_uncertainty(
 \item{catch_est}{If set to \code{TRUE}, return catch estimates from SAM.}
 }
 \value{
-A list of FLQuants with the elements: stock.n, harvest,
-  survey_catchability, catch_sd, survey_sd, survey_cov, proc_error, catch_n.
+A list of FLQuants with the elements: stock.n, harvest, catch.n, catch_sd, survey_catchability, survey_sd, survey_cov, proc_error.
 }
 \description{
 This function use the uncertainty estimated by SAM to create
@@ -49,16 +50,19 @@ mortality matches the stock numbers of the same replicate.
 
 The following metrics are returned:
 \itemize{
-  \item{\code{stock.n}} Stock numbers at age for all years,
-                        \code{FLQuant}
+  \item{\code{stock.n}} Stock numbers at age for all years, \code{FLQuant}
   \item{\code{harvest}} Fishing mortalities at age for all years,
-                        \code{FLQuant}
-  \item{\code{survey_catchability}} Catchability at age for all years for all
-                                    survey indices, list of \code{FLQuant}s
+    \code{FLQuant}
+  \item{\code{catch.n}} Estimates of catch numbers at age for all years. This
+    differs from the assessment input values. If the SAM model fit contains
+    catch multipliers, the values returned here are corrected for this.
+    Class \code{FLQuant}.
   \item{\code{catch_sd}} Standard deviation of the catch numbers at age,
-                         time invariant, \code{FLQuant}
+    time invariant, \code{FLQuant}
+  \item{\code{survey_catchability}} Catchability at age for all years for all
+    survey indices, list of \code{FLQuant}s
   \item{\code{survey_sd}} Standard deviation of all surveys at age, time
-                          invariant, list of \code{FLQuants},
+    invariant, list of \code{FLQuants},
   \item{\code{survey_cov}} Covariance matrices of survey ages, one for each
     survey. Return object is a list of lists, the first level corresponds to
     the replicates, the second level to the surveys. If no covariance
@@ -69,10 +73,6 @@ The following metrics are returned:
     time invariant, class \code{FLQuant}. This corresponds to the survival
     process error assumed/estimated, i.e. quantifies how much the actual
     stock numbers at age deviate from the deterministic catch equation.
-  \item{\code{catch_n}} Estimates of catch numbers at age for all years. This
-    differs from the assessment input values. If the SAM model fit contains
-    catch multipliers, the values returned here are corrected for this.
-    Class \code{FLQuant}.
 }
 }
 \examples{
@@ -80,5 +80,5 @@ The following metrics are returned:
 fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
 
 ### create 2 replicates
-reps <- SAM_uncertainty(fit, n = 2, idx_cov = TRUE, catch_est = TRUE)
+reps <- SAM_uncertainty(fit, n = 2)
 }
