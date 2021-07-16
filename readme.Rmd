@@ -1,5 +1,5 @@
 ---
-title: "readme"
+title: "FLfse"
 output: github_document
 ---
 
@@ -7,22 +7,25 @@ output: github_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+An R package for providing an interface between the SAM stock assessment (SAM, https://github.com/fishfollower/SAM) and the Fisheries Library in R (FLR, https://flr-project.org/).
+
+The package provides methods for running SAM with FLR objects (`FLR_SAM`) and functions useful for conducting a Management Strategy Evaluation (MSE). This includes methods for turning the output of a SAM model fit into FLR's `FLStock` (`SAM2FLStock`) and for creating simulation replicates based on SAM's variance-covariance matrix (`SAM_uncertainty`).
+
 ## Prerequisites
 
 Before installing FLfse, the following non-CRAN R packages should be installed:
 
 * stockassessment (available from https://github.com/fishfollower/SAM)
-* spict (available from https://github.com/mawp/spict/)
 * FLR packages FLCore and ggplotFL (see http://www.flr-project.org/#install)
 
 ## Install FLfse
 
 FLfse can be installed with
 ```{R, eval = FALSE}
-devtools::install_github("shfischer/FLfse/FLfse")
+remotes::install_github("shfischer/FLfse/FLfse")
 ```
 ## Showcase functionality
-load package
+Load package
 ```{r}
 library(FLfse)
 ```
@@ -30,12 +33,12 @@ The package includes example data for some stocks, see
 ```{R, eval = FALSE}
 data(package = "FLfse")
 ```
-Currently, this includes the 2017 assessment for Irish Sea plaice, the 2018 assessments for North Sea cod, North Sea haddock and North Sea whiting and the 2019 assessment for North Sea herring.
+Among others, this includes the 2018 assessments for North Sea cod, North Sea haddock and North Sea whiting and the 2019 assessment for North Sea herring.
 
-# Run stock assessments
-## SAM
-Fit SAM to North Sea cod data, with default parametrizations:
-```{R}
+### Run SAM stock assessments
+#### North Sea cod
+Fit SAM to North Sea cod data from ICES WGNSSK 2018, with default parameterisations:
+```{R, message = FALSE, warning = FALSE}
 fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx)
 ```
 use the SAM assessment configuration as used by ICES WGNSSK 2018:
@@ -48,40 +51,21 @@ fit$opt$convergence
 ### The result of FLR_SAM() is an object of class "sam". 
 ### All methods defined in the stockassessment package can be used on it.
 ### summary table
-summary(fit)
+tail(summary(fit))
 ### plot model
 plot(fit)
-### plot catch
-catchplot(fit)
 ```
 The resulting "sam" object can then be converted into an FLStock object:
-```{R}
+```{R, message = FALSE, warning = FALSE}
 cod4 <- SAM2FLStock(fit, cod4_stk)
 ### plot with ggplotFL
 library(ggplotFL)
 plot(cod4)
 ```
 
+#### North Sea herring
 
-## SPiCT
-Another assessment method implemented is the Surplus Production in Continuous Time (SPiCT) model (Pedersen & Berg, 2017).
-
-```{R}
-library(spict)
-### fit SPiCT to Irish Sea plaice
-fit <- FLR_SPiCT(stk = ple7a_stk, idx = ple7a_idx)
-### check results
-fit
-plot(fit)
-
-### pass additional configuration, set time step to 1 per year
-conf <- list(dteuler = 1)
-fit2 <- FLR_SPiCT(stk = ple7a_stk, idx = ple7a_idx, conf = conf)
-fit2
-```
-
-## SAM for North Sea herring
-The HAWG assessment for North Sea herring can be replicated with `FLfse`.
+The 2019 ICES HAWG assessment for North Sea herring can be replicated with `FLfse`.
 To get this assessment running, a different branch ("components") of the `stockassessment` package needs to be installed.
 The following code snippet shows how to do this without interfering with the global packages (please restart R if another version of stockassessment is currently loaded):
 
@@ -103,4 +87,28 @@ plot(fit)
 summary(fit)
 ### convert into FLStock
 stk <- SAM2FLStock(fit, her4_stk)
+```
+
+### Create simulation replicates from SAM model fit
+
+We can use SAM's variance-covariance matrix to create simulation replicates (e.g. for MSE).
+
+```{r, message = FALSE, warning = FALSE}
+### fit SAM to North Sea cod
+fit <- FLR_SAM(stk = cod4_stk, idx = cod4_idx, conf = cod4_conf_sam)
+### create simulation replicates
+set.seed(1)
+unc <- SAM_uncertainty(fit = fit, n = 10)
+### turn into FLStock
+stk <- SAM2FLStock(fit, cod4_stk)
+### insert replicates for stock numbers, catch numbers and fishing mortality
+stk <- propagate(stk, 10)
+stock.n(stk) <- unc$stock.n ### insert stock numbers
+stock <- computeStock(stk) ### update stock biomass
+catch.n(stk)[, ac(1963:2017)] <- unc$catch.n ### insert catch numbers
+catch(stk) <- computeCatch(stk) ### update total catch
+harvest(stk) <- unc$harvest ### insert fishing mortality at age
+units(harvest(stk)) <- "f"
+### plot stock and replicates
+plot(stk, iter = 1:10)
 ```
