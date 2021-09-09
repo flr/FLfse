@@ -4,3 +4,6 @@
 .Ruserdata
 thoughts/*
 scripts/*
+stocks/*
+tmp/*
+*tmp.R
