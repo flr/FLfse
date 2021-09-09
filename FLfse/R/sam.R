@@ -505,6 +505,7 @@ sam_to_FLStock <- function(
   object, ### sam object
   uncertainty = FALSE, ### confidence intervals?
   conf_level = 95, ### confidence interval level in %
+  stock_only = FALSE, ### only return stock estimates (SSB, F, not catch)
   catch_estimate = FALSE, ### use catch input or
                           ## model estimates
   correct_catch = FALSE, ### "correct" catch with
@@ -541,11 +542,20 @@ sam_to_FLStock <- function(
     }
   }
 
+  ### multi-fleet model?
+  ### fleet types:
+  ### 0 = catch at age,
+  ### 1 = catch at age with effort
+  ### 7 = sum of fleets
+  n_fleets <- length(which(object$data$fleetTypes %in% c(0, 1, 7)))
+  multifleet <- ifelse(isTRUE(n_fleets > 1), TRUE, FALSE)
+
   ### create FLQuant dummy
   qnt <- FLQuant(NA, dimnames = list(age = ages, year = years))
   ### create FLStock
   stk <- FLStock(qnt)
 
+  ### ---------------------------------------------------------------------- ###
   ### stock numbers @ age
   stock.n <- exp(object$pl$logN)
   n_ages <- dim(stock.n)[1]
@@ -560,10 +570,23 @@ sam_to_FLStock <- function(
     attr(stock.n(stk), "high") <- stock.n(stk) + stock.n_sd * SD_mult
   }
 
+  ### ---------------------------------------------------------------------- ###
   ### harvest @ age
-  harvest <- rbind(NA, exp(object$pl$logF))
-  ### duplicate linked ages
-  harvest <- harvest[object$conf$keyLogFsta[1,] + 2, ]
+
+  if (!isTRUE(multifleet)) {
+    harvest <- rbind(NA, exp(object$pl$logF))
+    ### duplicate linked ages
+    harvest <- harvest[object$conf$keyLogFsta[1,] + 2, ]
+  } else {
+    ### sum up F from fleets
+    harvest <- lapply(seq(n_fleets), function(x) {
+      f_idx <- object$conf$keyLogFsta[x, ] + 2
+      f_tmp <- rbind(NA, exp(object$pl$logF))[f_idx, ]
+      f_tmp[is.na(f_tmp)] <- 0
+      return(f_tmp)
+    })
+    harvest <- Reduce("+", harvest)
+  }
   n_ages <- dim(harvest)[1]
   n_yrs <- dim(harvest)[2]
   harvest(stk)[1:n_ages, 1:n_yrs] <- harvest
@@ -618,179 +641,314 @@ sam_to_FLStock <- function(
     attr(stock(stk), "high") <- exp(log(stock(stk)) + stock_sd * SD_mult)
   }
 
-
+  ### ---------------------------------------------------------------------- ###
   ### catch ####
-  ### catch weight @ age
-  if (isTRUE(length(dim(object$data$catchMeanWeight)) == 3)) {
-    catch.wt <- object$data$catchMeanWeight[,,, drop = TRUE]
-  } else {
-    catch.wt <- object$data$catchMeanWeight
-  }
-  catch.wt <- catch.wt[complete.cases(catch.wt), ] ### remove NAs
-  catch.wt <- t(catch.wt)
-  ### use dimnames because data in some years might be missing
-  c_ages <- intersect(dimnames(catch.wt)[[1]], dimnames(catch.wt(stk))$age)
-  c_yrs <- intersect(dimnames(catch.wt)[[2]], dimnames(catch.wt(stk))$year)
-  catch.wt(stk)[c_ages, c_yrs] <- catch.wt[c_ages, c_yrs]
-  ### replace catch weights with SAM estimates?
-  if (isTRUE(catch.wt_est)) {
-    catch.wt <- exp(object$pl$logCW)
-    if (all(dim(catch.wt) == 0)) {
-      warning("catch.wt estimates requested but not available")
+
+
+
+  if (isFALSE(stock_only)) {
+
+    ### -------------------------------------------------------------------- ###
+    ### catch numbers @ age
+
+    catch_fleets <- which(object$data$fleetTypes %in% c(0, 1, 7))
+    ### extract observations & estimates
+    dat_catch <- cbind(object$data$aux, value = exp(object$data$logobs),
+                       estimate = exp(object$rep$predObs))
+    dat_catch <- dat_catch[dat_catch[, "fleet"] %in% catch_fleets, ]
+    dat_catch_raw <- dat_catch ### save for later
+    ### sum up catch numbers over all commercial fleets
+    dat_catch <- stats::aggregate(cbind(value, estimate) ~ age + year,
+                                  dat_catch, FUN = sum)
+    ### add missing ages/years
+    dat_full <- expand.grid(age = unique(dat_catch$age),
+                            year = unique(dat_catch$year))
+    dat_catch <- merge(x = dat_catch, y = dat_full, all = TRUE)
+    dat_catch <- dat_catch[order(dat_catch$year, dat_catch$age), ] ### sort
+
+    ### insert catch: estimates or input values
+    if (!isTRUE(catch_estimate)) {
+
+      ### use input data
+      catch.n(stk)[ac(unique(dat_catch$age)), ac(unique(dat_catch$year))] <-
+        dat_catch$value
+
     } else {
-      catch.wt <- catch.wt[complete.cases(catch.wt), ]
+
+      ### use value estimated by SAM
+      catch.n(stk)[ac(unique(dat_catch$age)), ac(unique(dat_catch$year))] <-
+        dat_catch$estimate
+
+    }
+
+    ### correct catch numbers if a catch multiplier was estimated
+    if (isTRUE(correct_catch)) {
+
+      ### warn if no catch multiplier available
+      if (!(length(object$pl$logScale) > 1)) {
+
+        warning("catch correction requested but no catch multiplier estimated")
+
+      } else {
+
+        ### get catch multiplier dimensions
+        ages_mult <- object$conf$minAge:object$conf$maxAge
+        yrs_mult <- object$conf$keyScaledYears
+        ### create catch multiplier FLQuant
+        catch_mult_data <- FLQuant(
+          matrix(data = object$pl$logScale[(object$conf$keyParScaledYA + 1)],
+                 ncol = object$conf$noScaledYears,
+                 nrow = length(object$conf$minAge:object$conf$maxAge),
+                 byrow = TRUE),
+          dimnames = list(year = object$conf$keyScaledYears,
+                          age = object$conf$minAge:object$conf$maxAge))
+        ### model values in log scale, exponentiate
+        catch_mult_data <- exp(catch_mult_data)
+        ### for simpler calculations, expand dimensions for stock
+        catch_mult <- catch.n(stk) %=% 1
+        catch_mult[ac(ages_mult), ac(yrs_mult)] <- catch_mult_data
+
+        ### correct catch.n
+        catch.n(stk) <- catch.n(stk) * catch_mult
+        # ### split into landings and discards, based on landing fraction
+        # ### done later
+        # land_frac <- landings.n(stk) / catch.n(stk)
+        # landings.n(stk) <- catch.n(stk) * land_frac
+        # discards.n(stk) <- catch.n(stk) * (1 - land_frac)
+        # ### update stock
+        # catch(stk) <- computeCatch(stk)
+        # landings(stk) <- computeLandings(stk)
+        # discards(stk)<- computeDiscards(stk)
+
+        # ### catch biomass
+        # catch <- quantSums(qnt)
+        # catch[, 1:n_yrs] <- exp(object$sdrep$value[names(object$sdrep$value) ==
+        #                                              "logCatch"])
+        # catch(stk) <- catch
+      }
+
+    }
+
+    ### -------------------------------------------------------------------- ###
+    ### catch weights
+
+    if (isFALSE(multifleet)) {
+
+      if (isTRUE(length(dim(object$data$catchMeanWeight)) == 3)) {
+        catch.wt <- object$data$catchMeanWeight[,,, drop = TRUE]
+      } else {
+        catch.wt <- object$data$catchMeanWeight
+      }
+      catch.wt <- catch.wt[complete.cases(catch.wt), ] ### remove NAs
       catch.wt <- t(catch.wt)
-      n_ages <- min(dim(catch.wt)[1], dim(catch.wt(stk))[1])
-      n_yrs <- min(dim(catch.wt)[2], dim(catch.wt(stk))[2])
-      catch.wt(stk)[1:n_ages, 1:n_yrs] <- catch.wt[1:n_ages, 1:n_yrs]
-    }
-  }
-  ### catch numbers @ age
-  catch_fleets <- which(object$data$fleetTypes == 0)
-  ### extract observations & estimates
-  dat_catch <- cbind(object$data$aux, value = exp(object$data$logobs),
-                     estimate = exp(object$rep$predObs))
-  dat_catch <- dat_catch[dat_catch[, "fleet"] == catch_fleets, ]
-  ### sum up catch numbers over all commercial fleets
-  dat_catch <- stats::aggregate(cbind(value, estimate) ~ age + year, dat_catch,
-                         FUN = sum)
-  ### add missing ages/years
-  dat_full <- expand.grid(age = unique(dat_catch$age),
-                          year = unique(dat_catch$year))
-  dat_catch <- merge(x = dat_catch, y = dat_full, all = TRUE)
-  dat_catch <- dat_catch[order(dat_catch$year, dat_catch$age), ] ### sort
+      ### use dimnames because data in some years might be missing
+      c_ages <- intersect(dimnames(catch.wt)[[1]], dimnames(catch.wt(stk))$age)
+      c_yrs <- intersect(dimnames(catch.wt)[[2]], dimnames(catch.wt(stk))$year)
+      catch.wt(stk)[c_ages, c_yrs] <- catch.wt[c_ages, c_yrs]
 
-  ### insert catch: estimates or input values
-  if (!isTRUE(catch_estimate)) {
+      ### replace catch weights with SAM estimates?
+      if (isTRUE(catch.wt_est)) {
+        catch.wt <- exp(object$pl$logCW)
+        if (all(dim(catch.wt) == 0)) {
+          warning("catch.wt estimates requested but not available")
+        } else {
+          catch.wt <- catch.wt[complete.cases(catch.wt), ]
+          catch.wt <- t(catch.wt)
+          n_ages <- min(dim(catch.wt)[1], dim(catch.wt(stk))[1])
+          n_yrs <- min(dim(catch.wt)[2], dim(catch.wt(stk))[2])
+          catch.wt(stk)[1:n_ages, 1:n_yrs] <- catch.wt[1:n_ages, 1:n_yrs]
+        }
+      }
 
-    ### use input data
-    catch.n(stk)[ac(unique(dat_catch$age)), ac(unique(dat_catch$year))] <-
-      dat_catch$value
+      ### total catch
+      catch(stk) <- computeCatch(stk)
 
-  } else {
+      ### catch range
+      if (isTRUE(uncertainty) & isTRUE(catch_estimate)) {
+        catch_sd <- quantSums(qnt)
+        catch_sd[, 1:n_yrs] <- object$sdrep$sd[names(object$sdrep$value) == "logCatch"]
+        attr(catch(stk), "low") <- exp(log(catch(stk)) - catch_sd * SD_mult)
+        attr(catch(stk), "high") <- exp(log(catch(stk)) + catch_sd * SD_mult)
+      }
 
-    ### use value estimated by SAM
-    catch.n(stk)[ac(unique(dat_catch$age)), ac(unique(dat_catch$year))] <-
-      dat_catch$estimate
+      ### ------------------------------------------------------------------ ###
+      ### landings
 
-  }
+      ### calculate with landings fraction of total catch
+      if (isTRUE(length(dim(object$data$landFrac)) == 3)) {
+        lfrac <- t(object$data$landFrac[,,, drop = TRUE])
+      } else {
+        lfrac <- t(object$data$landFrac)
+      }
+      n_ages <- dim(lfrac)[1]
+      n_yrs <- dim(lfrac)[2]
+      lfrac_qnt <- qnt ### FLQuant template
+      lfrac_qnt[1:n_ages, 1:n_yrs] <- lfrac
+      ### calculate landings numbers @ age
+      landings.n(stk) <- catch.n(stk) * lfrac_qnt
+      ### landings weights @ age
+      if (isTRUE(length(dim(object$data$landMeanWeight)) == 3)) {
+        landings.wt <- t(object$data$landMeanWeight[,,, drop = TRUE])
+      } else {
+        landings.wt <- t(object$data$landMeanWeight)
+      }
+      n_ages <- dim(landings.wt)[1]
+      n_yrs <- dim(landings.wt)[2]
+      landings.wt(stk)[1:n_ages, 1:n_yrs] <- landings.wt
+      ### total landings
+      landings(stk) <- computeLandings(stk)
+      ### landings range
+      if (isTRUE(uncertainty)) {
+        ### landing fraction of total catch
+        lfrac_qnt_sum <- landings(stk) / catch(stk)
+        ### replace NAs with 1
+        lfrac_qnt_sum[is.na(lfrac_qnt_sum)] <- 1
+        ### calculate range
+        ### assume that landing fraction is the same for estimate, low and high
+        ### -> split catch into landings and discards
+        attr(landings(stk), "low") <- attr(catch(stk), "low") * lfrac_qnt_sum
+        attr(landings(stk), "high") <- attr(catch(stk), "high") * lfrac_qnt_sum
+      }
 
-  ### correct catch numbers if a catch multiplier was estimated
-  if (isTRUE(correct_catch)) {
+      ### ------------------------------------------------------------------ ###
+      ### discards
 
-    ### warn if no catch multiplier available
-    if (!(length(object$pl$logScale) > 1)) {
+      ### calculate discards number @ age
+      discards.n(stk) <- catch.n(stk) * (1 - lfrac_qnt)
+      ### discards weights @ age
+      if (isTRUE(length(dim(object$data$disMeanWeight)) == 3)) {
+        discards.wt <- t(object$data$disMeanWeight[,,, drop = TRUE])
+      } else {
+        discards.wt <- t(object$data$disMeanWeight)
+      }
+      n_ages <- dim(discards.wt)[1]
+      n_yrs <- dim(discards.wt)[2]
+      discards.wt(stk)[1:n_ages, 1:n_yrs] <- discards.wt
+      ### total discards
+      discards(stk) <- computeDiscards(stk)
+      ### discard range
+      if (isTRUE(uncertainty)) {
+        ### calculate range
+        ### assume that landing fraction is the same for estimate, low and high
+        attr(discards(stk), "low") <- attr(catch(stk), "low") * (1 - lfrac_qnt_sum)
+        attr(discards(stk), "high") <- attr(catch(stk), "high") * (1 - lfrac_qnt_sum)
+      }
 
-      warning("catch correction requested but no catch multiplier estimated")
-
+    ### -------------------------------------------------------------------- ###
+    ### >1 fleet: catch/landings/discards - weights and numbers
     } else {
 
-      ### get catch multiplier dimensions
-      ages_mult <- object$conf$minAge:object$conf$maxAge
-      yrs_mult <- object$conf$keyScaledYears
-      ### create catch multiplier FLQuant
-      catch_mult_data <- FLQuant(
-        matrix(data = object$pl$logScale[(object$conf$keyParScaledYA + 1)],
-               ncol = object$conf$noScaledYears,
-               nrow = length(object$conf$minAge:object$conf$maxAge),
-               byrow = TRUE),
-        dimnames = list(year = object$conf$keyScaledYears,
-                        age = object$conf$minAge:object$conf$maxAge))
-      ### model values in log scale, exponentiate
-      catch_mult_data <- exp(catch_mult_data)
-      ### for simpler calculations, expand dimensions for stock
-      catch_mult <- catch.n(stk) %=% 1
-      catch_mult[ac(ages_mult), ac(yrs_mult)] <- catch_mult_data
+      message(paste0("The fit object contains a multi-fleet SAM model.\n",
+                     "In the returned FLStock, the fleets are combined into ",
+                     "a single fleet."))
 
-      ### correct catch.n
-      catch.n(stk) <- catch.n(stk) * catch_mult
-      # ### split into landings and discards, based on landing fraction
-      # ### done later
-      # land_frac <- landings.n(stk) / catch.n(stk)
-      # landings.n(stk) <- catch.n(stk) * land_frac
-      # discards.n(stk) <- catch.n(stk) * (1 - land_frac)
-      # ### update stock
-      # catch(stk) <- computeCatch(stk)
-      # landings(stk) <- computeLandings(stk)
-      # discards(stk)<- computeDiscards(stk)
+      ### metrics available on fleet level
+      dlist <- c("catchMeanWeight", "landMeanWeight", "disMeanWeight",
+                 "landFrac")
+      names(dlist) <- dlist
+      ### extract and format these metrics
+      catch.wts <- lapply(dlist, function(x) {
+        tmp1 <- lapply(seq(dim(object$data[[x]])[3]), function(y) {
+          #browser()
+          tmp2 <- object$data[[x]][,, y, drop = TRUE]
+          tmp2 <- tmp2[complete.cases(tmp2), ] ### remove NAs
+          tmp2 <- data.frame(year = as.numeric(row.names(tmp2)),
+                             age = rep(as.numeric(colnames(tmp2)),
+                                       each = nrow(tmp2)),
+                             data = c(tmp2),
+                             fleet = y)
+          names(tmp2)[names(tmp2) == "data"] <- x
+          return(tmp2)
+        })
+        tmp1 <- do.call(rbind, tmp1)
+        return(tmp1)
+      })
+      catch.wts <- Reduce(function(...) merge(..., all = TRUE), catch.wts)
+      ### merge stock numbers
+      dat_weights <- merge(catch.wts, dat_catch_raw, all = TRUE,
+                           by = c("year", "age", "fleet"))
+      ### replace all NA weights with 0
+      dat_weights[, c(dlist)][is.na(dat_weights[, c(dlist)])] <- 0
+      ### add fleet types
+      dat_weights <- merge(x = dat_weights,
+        y = data.frame(fleet = catch_fleets,
+                       fleet_type = object$data$fleetTypes[catch_fleets]),
+        by = "fleet", all.x = TRUE, all.y = FALSE)
+      ### split into year-age groups
+      dat_weights <- split(x = dat_weights,
+                           f = list(dat_weights$year, dat_weights$age))
+      ### mean weight, weighted by numbers
+      dat_weights <- lapply(dat_weights, function(x) {
+        ### account for summed fleet
+        if (isTRUE(7 %in% x$fleet_type)) {
+          if (all(is.na(x$value[x$fleet_type != 7])) &
+              all(x$catchMeanWeight[x$fleet_type == 7] == 0)) {
+            x$value[x$fleet_type != 7] <- 1e-15
+            x$estimate[x$fleet_type != 7] <- 1e-15
+            x <- x[x$fleet_type != 7, ]
+          }
+        }
+        data.frame(year = unique(x$year), age = unique(x$age),
+                   lw = weighted.mean(x = x$landMeanWeight, w = x$value,
+                                      na.rm = TRUE),
+                   dw = weighted.mean(x = x$disMeanWeight, w = x$value,
+                                      na.rm = TRUE),
+                   cw = weighted.mean(x = x$catchMeanWeight, w = x$value,
+                                      na.rm = TRUE),
+                   lfrac = weighted.mean(x = x$landFrac, w = x$value,
+                                         na.rm = TRUE),
+                   value = sum(x$value, na.rm = TRUE),
+                   estimate = sum(x$estimate, na.rm = TRUE))
+      })
+      dat_weights <- do.call(rbind, dat_weights)
+      dat_weights[, c("lw", "dw", "cw")][is.na(dat_weights[, c("lw", "dw", "cw")])] <- 0 ### replace all NA with 0
+      dat_weights$lfrac[is.na(dat_weights$lfrac)] <- 1
 
-      # ### catch biomass
-      # catch <- quantSums(qnt)
-      # catch[, 1:n_yrs] <- exp(object$sdrep$value[names(object$sdrep$value) ==
-      #                                              "logCatch"])
-      # catch(stk) <- catch
+      ### catch.wt
+      dat_cw <- dat_weights[, c("year", "age", "cw")]
+      names(dat_cw)[3] <- "data"
+      dat_cw <- as(dat_cw, "FLQuant")
+      c_ages <- intersect(dimnames(dat_cw)[[1]], dimnames(catch.wt(stk))$age)
+      c_yrs <- intersect(dimnames(dat_cw)[[2]], dimnames(catch.wt(stk))$year)
+      catch.wt(stk)[c_ages, c_yrs] <- dat_cw
+
+      ### landings.wt
+      dat_lw <- dat_weights[, c("year", "age", "lw")]
+      names(dat_lw)[3] <- "data"
+      dat_lw <- as(dat_lw, "FLQuant")
+      c_ages <- intersect(dimnames(dat_lw)[[1]], dimnames(landings.wt(stk))$age)
+      c_yrs <- intersect(dimnames(dat_lw)[[2]], dimnames(landings.wt(stk))$year)
+      landings.wt(stk)[c_ages, c_yrs] <- dat_lw
+
+      ### discards.wt
+      dat_dw <- dat_weights[, c("year", "age", "dw")]
+      names(dat_dw)[3] <- "data"
+      dat_dw <- as(dat_dw, "FLQuant")
+      c_ages <- intersect(dimnames(dat_dw)[[1]], dimnames(landings.wt(stk))$age)
+      c_yrs <- intersect(dimnames(dat_dw)[[2]], dimnames(landings.wt(stk))$year)
+      landings.wt(stk)[c_ages, c_yrs] <- dat_dw
+
+      ### landings fraction
+      dat_lfrac <- dat_weights[, c("year", "age", "lfrac")]
+      names(dat_lfrac)[3] <- "data"
+      dat_lfrac <- as(dat_lfrac, "FLQuant")
+      c_ages <- intersect(dimnames(dat_lfrac)[[1]], dimnames(m(stk))$age)
+      c_yrs <- intersect(dimnames(dat_lfrac)[[2]], dimnames(m(stk))$year)
+
+      ### landings numbers
+      landings.n(stk)[c_ages, c_yrs] <- catch.n(stk)[c_ages, c_yrs] *
+        dat_lfrac[c_ages, c_yrs]
+      ### discards numbers
+      discards.n(stk)[c_ages, c_yrs] <- catch.n(stk)[c_ages, c_yrs] *
+        (1 - dat_lfrac[c_ages, c_yrs])
+
+      ### update total catch/landings/discards
+      catch(stk) <- computeCatch(stk)
+      landings(stk) <- computeLandings(stk)
+      discards(stk) <- computeDiscards(stk)
+
     }
 
-  }
-
-  ### total catch
-  catch(stk) <- computeCatch(stk)
-
-  ### catch range
-  if (isTRUE(uncertainty) & isTRUE(catch_estimate)) {
-    catch_sd <- quantSums(qnt)
-    catch_sd[, 1:n_yrs] <- object$sdrep$sd[names(object$sdrep$value) == "logCatch"]
-    attr(catch(stk), "low") <- exp(log(catch(stk)) - catch_sd * SD_mult)
-    attr(catch(stk), "high") <- exp(log(catch(stk)) + catch_sd * SD_mult)
-  }
-
-  ### landings
-  ### calculate with landings fraction of total catch
-  if (isTRUE(length(dim(object$data$landFrac)) == 3)) {
-    lfrac <- t(object$data$landFrac[,,, drop = TRUE])
-  } else {
-    lfrac <- t(object$data$landFrac)
-  }
-  n_ages <- dim(lfrac)[1]
-  n_yrs <- dim(lfrac)[2]
-  lfrac_qnt <- qnt ### FLQuant template
-  lfrac_qnt[1:n_ages, 1:n_yrs] <- lfrac
-  ### calculate landings numbers @ age
-  landings.n(stk) <- catch.n(stk) * lfrac_qnt
-  ### landings weights @ age
-  if (isTRUE(length(dim(object$data$landMeanWeight)) == 3)) {
-    landings.wt <- t(object$data$landMeanWeight[,,, drop = TRUE])
-  } else {
-    landings.wt <- t(object$data$landMeanWeight)
-  }
-  n_ages <- dim(landings.wt)[1]
-  n_yrs <- dim(landings.wt)[2]
-  landings.wt(stk)[1:n_ages, 1:n_yrs] <- landings.wt
-  ### total landings
-  landings(stk) <- computeLandings(stk)
-  ### landings range
-  if (isTRUE(uncertainty)) {
-    ### landing fraction of total catch
-    lfrac_qnt_sum <- landings(stk) / catch(stk)
-    ### replace NAs with 1
-    lfrac_qnt_sum[is.na(lfrac_qnt_sum)] <- 1
-    ### calculate range
-    ### assume that landing fraction is the same for estimate, low and high
-    ### -> split catch into landings and discards
-    attr(landings(stk), "low") <- attr(catch(stk), "low") * lfrac_qnt_sum
-    attr(landings(stk), "high") <- attr(catch(stk), "high") * lfrac_qnt_sum
-  }
-
-  ### discards
-  ### calculate discards number @ age
-  discards.n(stk) <- catch.n(stk) * (1 - lfrac_qnt)
-  ### discards weights @ age
-  if (isTRUE(length(dim(object$data$disMeanWeight)) == 3)) {
-    discards.wt <- t(object$data$disMeanWeight[,,, drop = TRUE])
-  } else {
-    discards.wt <- t(object$data$disMeanWeight)
-  }
-  n_ages <- dim(discards.wt)[1]
-  n_yrs <- dim(discards.wt)[2]
-  discards.wt(stk)[1:n_ages, 1:n_yrs] <- discards.wt
-  ### total discards
-  discards(stk) <- computeDiscards(stk)
-  ### discard range
-  if (isTRUE(uncertainty)) {
-    ### calculate range
-    ### assume that landing fraction is the same for estimate, low and high
-    attr(discards(stk), "low") <- attr(catch(stk), "low") * (1 - lfrac_qnt_sum)
-    attr(discards(stk), "high") <- attr(catch(stk), "high") * (1 - lfrac_qnt_sum)
   }
 
   ### ---------------------------------------------------------------------- ###
@@ -845,7 +1003,11 @@ sam_to_FLStock <- function(
 
   ### ---------------------------------------------------------------------- ###
   ### proportion of F before spawning
-  if (isTRUE(length(dim(object$data$propF)) == 3)) {
+
+  if (isTRUE(multifleet)) {
+    ### when multiple fishing fleets exists, use mean
+    harvest.spwn <- t(apply(object$data$propF, 1:2, mean))
+  } else if (isTRUE(length(dim(object$data$propF)) == 3)) {
     harvest.spwn <- t(object$data$propF[,,, drop = TRUE])
   } else {
     harvest.spwn <- t(object$data$propF)
@@ -856,6 +1018,7 @@ sam_to_FLStock <- function(
 
   ### ---------------------------------------------------------------------- ###
   ### proportion of M before spawning
+
   m.spwn <- t(object$data$propM)
   n_ages <- dim(m.spwn)[1]
   n_yrs <- dim(m.spwn)[2]
@@ -863,10 +1026,12 @@ sam_to_FLStock <- function(
 
   ### ---------------------------------------------------------------------- ###
   ### set description
+
   desc(stk) <- "FLStock created from SAM model fit"
 
   ### ---------------------------------------------------------------------- ###
   ### set range
+
   ### plusgroup?
   range(stk)["plusgroup"] <- ifelse(isTRUE(object$conf$maxAgePlusGroup[[1]] == 1),
                                     object$conf$maxAge, NA)
@@ -875,6 +1040,7 @@ sam_to_FLStock <- function(
 
   ### ---------------------------------------------------------------------- ###
   ### return FLStock
+
   return(stk)
 
 }
@@ -955,6 +1121,10 @@ setOldClass("sam_list")
 #'
 #' The \code{object} argument can either be a single SAM model fit or a list of SAM model fits (defined as class \code{sam_list}). If a list is provided, the output is an \code{FLStock} object where the different iterations correspond to the individual model fits.
 #'
+#' The function can handle SAM model fits with multiple fleets. In the returned
+#' FLStock, the fleets are combined into a single fleet. Some functionality
+#' (e.g. uncertainty bounds) might not work for multiple fleets.
+#'
 #'
 #' @param object Object of class \code{sam} with the results from a
 #'   SAM stock assessment run. Alternatively, object of class \code{sam_list},
@@ -965,6 +1135,9 @@ setOldClass("sam_list")
 #' SAM will be added as attribute.
 #' @param conf_level Confidence level used when uncertainty is returned.
 #'   Defaults to 95 (percent).
+#' @param stock_only Logical. If set to \code{TRUE}, catch data (numbers,
+#' weights) are ignored and only stock data (numbers, SSB, etc.) are
+#' returned
 #' @param catch_estimate Logical, return the catch estimated by SAM instead of the model input?
 #' @param correct_catch Logical, correct catch with
 #'   catch multiplier estimated by SAM?
@@ -986,11 +1159,20 @@ setOldClass("sam_list")
 #' # get catch estimates from model
 #' stk <- SAM2FLStock(fit, catch_estimate = TRUE)
 #'
+#' \dontrun{
+#' # use multi-fleet SAM model for western Baltic spring-spawning herring and
+#' # load model fit from stockassessment.org
+#' fit <- stockassessment::fitfromweb("WBSS_HAWG_2021")
+#' stk <- SAM2FLStock(fit)
+#' }
+#'
 #' @export
 
 setGeneric("SAM2FLStock",
            function(object, stk, uncertainty = FALSE,
-                    conf_level = 95, catch_estimate = FALSE,
+                    conf_level = 95,
+                    stock_only = FALSE,
+                    catch_estimate = FALSE,
                     correct_catch = FALSE,
                     mat_est = FALSE, stock.wt_est = FALSE,
                     catch.wt_est = FALSE, m_est = FALSE,
@@ -1003,14 +1185,15 @@ setGeneric("SAM2FLStock",
 setMethod(f = "SAM2FLStock",
           signature = signature(object = "sam", stk = "missing"),
           definition = function(object, stk, uncertainty = FALSE,
-                                conf_level = 95, catch_estimate = FALSE,
-                                correct_catch = FALSE,
+                                conf_level = 95, stock_only = FALSE,
+                                catch_estimate = FALSE, correct_catch = FALSE,
                                 mat_est = FALSE, stock.wt_est = FALSE,
                                 catch.wt_est = FALSE, m_est = FALSE,
                                 spinoutyear = FALSE) {
 
     sam_to_FLStock(object = object, stk = stk, uncertainty = uncertainty,
-                   conf_level = conf_level, catch_estimate = catch_estimate,
+                   conf_level = conf_level, stock_only = stock_only,
+                   catch_estimate = catch_estimate,
                    correct_catch = correct_catch, mat_est = mat_est,
                    stock.wt_est = stock.wt_est, catch.wt_est = catch.wt_est,
                    m_est = m_est, spinoutyear = spinoutyear)
@@ -1022,14 +1205,14 @@ setMethod(f = "SAM2FLStock",
 setMethod(f = "SAM2FLStock",
           signature = signature(object = "sam_list", stk = "missing"),
           definition = function(object, stk, uncertainty = FALSE,
-                                conf_level = 95, catch_estimate = FALSE,
-                                correct_catch = FALSE,
+                                conf_level = 95, stock_only = FALSE,
+                                catch_estimate = FALSE, correct_catch = FALSE,
                                 mat_est = FALSE, stock.wt_est = FALSE,
                                 catch.wt_est = FALSE, m_est = FALSE,
                                 spinoutyear = FALSE) {
 
     sam_list_to_FLStock(object = object, stk = stk, uncertainty = uncertainty,
-                        conf_level = conf_level,
+                        conf_level = conf_level, stock_only = stock_only,
                         catch_estimate = catch_estimate,
                         correct_catch = correct_catch, mat_est = mat_est,
                         stock.wt_est = stock.wt_est, catch.wt_est = catch.wt_est,
@@ -1042,7 +1225,8 @@ setMethod(f = "SAM2FLStock",
 setMethod(f = "SAM2FLStock",
           signature = signature(object = "sam", stk = "FLStock"),
           definition = function(object, stk, uncertainty = FALSE,
-                                conf_level = 95, catch_estimate = FALSE,
+                                conf_level = 95, stock_only = FALSE,
+                                catch_estimate = FALSE,
                                 correct_catch = FALSE,
                                 mat_est = FALSE, stock.wt_est = FALSE,
                                 catch.wt_est = FALSE, m_est = FALSE,
@@ -1052,6 +1236,7 @@ setMethod(f = "SAM2FLStock",
   stk_new <- sam_to_FLStock(object = object, stk = stk,
                             uncertainty = uncertainty,
                             conf_level = conf_level,
+                            stock_only = stock_only,
                             catch_estimate = catch_estimate,
                             correct_catch = correct_catch,
                             mat_est = mat_est,
@@ -1079,7 +1264,8 @@ setMethod(f = "SAM2FLStock",
 setMethod(f = "SAM2FLStock",
           signature = signature(object = "sam_list", stk = "FLStock"),
           definition = function(object, stk, uncertainty = FALSE,
-                                conf_level = 95, catch_estimate = FALSE,
+                                conf_level = 95, stock_only = FALSE,
+                                catch_estimate = FALSE,
                                 correct_catch = FALSE,
                                 mat_est = FALSE, stock.wt_est = FALSE,
                                 catch.wt_est = FALSE, m_est = FALSE,
@@ -1089,6 +1275,7 @@ setMethod(f = "SAM2FLStock",
   stk_new <- sam_list_to_FLStock(object = object, stk = stk,
                                  uncertainty = uncertainty,
                                  conf_level = conf_level,
+                                 stock_only = stock_only,
                                  catch_estimate = catch_estimate,
                                  correct_catch = correct_catch,
                                  mat_est = mat_est,

@@ -16,5 +16,5 @@ NULL
 NULL
 
 ### import functions from stats
-#' @importFrom stats complete.cases plogis
+#' @importFrom stats complete.cases plogis weighted.mean
 NULL

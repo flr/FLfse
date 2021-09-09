@@ -1,6 +1,17 @@
 NEWS
 ================
 
+## Version 1.0.1
+
+Changes to `SAM2FLStock`
+
+-   This function can now handle multi-fleet SAM model fits. An example
+    is given in the documentation for this method (see `?SAM2FLStock`).
+
+-   Added `stock_only` argument. If set to `TRUE`, catch data (numbers,
+    weights) are ignored and only stock data (numbers, SSB, etc.) are
+    returned.
+
 ## Version 1.0
 
 ### Changes since version 0.x

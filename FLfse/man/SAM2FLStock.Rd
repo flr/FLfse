@@ -13,6 +13,7 @@ SAM2FLStock(
   stk,
   uncertainty = FALSE,
   conf_level = 95,
+  stock_only = FALSE,
   catch_estimate = FALSE,
   correct_catch = FALSE,
   mat_est = FALSE,
@@ -27,6 +28,7 @@ SAM2FLStock(
   stk,
   uncertainty = FALSE,
   conf_level = 95,
+  stock_only = FALSE,
   catch_estimate = FALSE,
   correct_catch = FALSE,
   mat_est = FALSE,
@@ -41,6 +43,7 @@ SAM2FLStock(
   stk,
   uncertainty = FALSE,
   conf_level = 95,
+  stock_only = FALSE,
   catch_estimate = FALSE,
   correct_catch = FALSE,
   mat_est = FALSE,
@@ -55,6 +58,7 @@ SAM2FLStock(
   stk,
   uncertainty = FALSE,
   conf_level = 95,
+  stock_only = FALSE,
   catch_estimate = FALSE,
   correct_catch = FALSE,
   mat_est = FALSE,
@@ -69,6 +73,7 @@ SAM2FLStock(
   stk,
   uncertainty = FALSE,
   conf_level = 95,
+  stock_only = FALSE,
   catch_estimate = FALSE,
   correct_catch = FALSE,
   mat_est = FALSE,
@@ -91,6 +96,10 @@ SAM will be added as attribute.}
 
 \item{conf_level}{Confidence level used when uncertainty is returned.
 Defaults to 95 (percent).}
+
+\item{stock_only}{Logical. If set to \code{TRUE}, catch data (numbers,
+weights) are ignored and only stock data (numbers, SSB, etc.) are
+returned}
 
 \item{catch_estimate}{Logical, return the catch estimated by SAM instead of the model input?}
 
@@ -120,6 +129,10 @@ converts them into an \code{FLStock} object.
 If an \code{FLStock} is provided as \code{stk} argument, then this is used as template. If the dimensions (years, iterations) differ between the SAM results and the provided stock template, the returned \code{FLStock} is expanded.
 
 The \code{object} argument can either be a single SAM model fit or a list of SAM model fits (defined as class \code{sam_list}). If a list is provided, the output is an \code{FLStock} object where the different iterations correspond to the individual model fits.
+
+The function can handle SAM model fits with multiple fleets. In the returned
+FLStock, the fleets are combined into a single fleet. Some functionality
+(e.g. uncertainty bounds) might not work for multiple fleets.
 }
 \examples{
 # fit SAM to North Sea cod
@@ -130,5 +143,12 @@ stk <- SAM2FLStock(fit)
 
 # get catch estimates from model
 stk <- SAM2FLStock(fit, catch_estimate = TRUE)
+
+\dontrun{
+# use multi-fleet SAM model for western Baltic spring-spawning herring and
+# load model fit from stockassessment.org
+fit <- stockassessment::fitfromweb("WBSS_HAWG_2021")
+stk <- SAM2FLStock(fit)
+}
 
 }
