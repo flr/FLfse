@@ -1,7 +1,7 @@
 Package: FLfse
 Type: Package
 Title: Fisheries Sampling Evaluation In FLR
-Version: 1.0.1
+Version: 1.0.2
 Authors@R: c(
   person("Simon H.", "Fischer", email = "simon.fischer@cefas.co.uk",
     role = c("aut", "cre")),

@@ -656,6 +656,15 @@ sam_to_FLStock <- function(
     dat_catch <- cbind(object$data$aux, value = exp(object$data$logobs),
                        estimate = exp(object$rep$predObs))
     dat_catch <- dat_catch[dat_catch[, "fleet"] %in% catch_fleets, ]
+    dat_catch <- as.data.frame(dat_catch)
+    ### workaround if names (actual years, not index values)
+    ### for years are missing
+    if (all(unique(dat_catch$year) %in% seq_along(object$data$years))) {
+      dat_catch$year <- factor(dat_catch$year,
+                               levels = seq(object$data$noYears),
+                               labels = object$data$years)
+      dat_catch$year <- as.numeric(as.character(dat_catch$year))
+    }
     dat_catch_raw <- dat_catch ### save for later
     ### sum up catch numbers over all commercial fleets
     dat_catch <- stats::aggregate(cbind(value, estimate) ~ age + year,

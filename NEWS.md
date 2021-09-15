@@ -1,6 +1,13 @@
 NEWS
 ================
 
+## Version 1.0.2
+
+Changes to `SAM2FLStock`
+
+-   Fixed bug when observations in the SAM model fit do not include
+    years but instead an index for the years (1, 2, 3, …).
+
 ## Version 1.0.1
 
 Changes to `SAM2FLStock`
