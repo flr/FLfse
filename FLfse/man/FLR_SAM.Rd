@@ -14,6 +14,7 @@ FLR_SAM(
   par_ini = NULL,
   DoParallel = FALSE,
   NA_rm = TRUE,
+  idx_weight = FALSE,
   ...
 )
 
@@ -25,6 +26,7 @@ FLR_SAM(
   par_ini = NULL,
   DoParallel = FALSE,
   NA_rm = TRUE,
+  idx_weight = FALSE,
   ...
 )
 
@@ -36,6 +38,7 @@ FLR_SAM(
   par_ini = NULL,
   DoParallel = FALSE,
   NA_rm = TRUE,
+  idx_weight = FALSE,
   ...
 )
 }
@@ -59,6 +62,9 @@ will perform iterations of stock in parallel. See Details below for
 description.}
 
 \item{NA_rm}{Remove trailing years with NAs, defaults to \code{TRUE}.}
+
+\item{idx_weight}{Use index weights (index variance)? Defaults to
+\code{FALSE}. If required, should be slot of \code{idx}.}
 
 \item{...}{Additional arguments passed to \code{sam.fit()}, e.g.
 \code{newtonsteps}}

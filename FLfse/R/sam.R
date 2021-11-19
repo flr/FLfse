@@ -22,7 +22,8 @@ matrix2FLQuant <- function(input) {
 
 ### function for running SAM
 ### runs inside FLR_SAM_run
-FLR_SAM_iter <- function(stk, idx, conf, par_ini, i, NA_rm, conf_full, ...) {
+FLR_SAM_iter <- function(stk, idx, conf, par_ini, i, NA_rm, conf_full,
+                         idx_weight, ...) {
 
   ### subset stock and index to current iter
   stk_i <- FLCore::iter(stk, i)
@@ -132,6 +133,16 @@ FLR_SAM_iter <- function(stk, idx, conf, par_ini, i, NA_rm, conf_full, ...) {
     ### add survey timing as attribute
     attr(tmp, "time") <- as.vector(range(x)[c("startf", "endf")])
 
+    ### use index "weights" (variance)
+    if (!isFALSE(idx_weight)) {
+      tmp_weights <- slot(x, name = idx_weight)
+      tmp_weights <- array(data = tmp_weights, dim = tmp_dim[1:2],
+                           dimnames = tmp_dimnames[1:2])
+      tmp_weights <- t(tmp_weights)
+      ### save as attribute "weight"
+      attr(tmp, "weight") <- tmp_weights
+    }
+
     return(tmp)
   })
   ### add partial attribute "part" to surveys, e.g. used for herring
@@ -153,7 +164,7 @@ FLR_SAM_iter <- function(stk, idx, conf, par_ini, i, NA_rm, conf_full, ...) {
 
   ### fbar range
   if (all(!is.na(range(stk_i)[c("minfbar", "maxfbar")]))) {
-    conf_sam$fbarRange <- range(stk_i)[c("minfbar", "maxfbar")]
+    conf_sam$fbarRange <- as.vector(range(stk_i)[c("minfbar", "maxfbar")])
   }
 
   ### insert configuration, if supplied to function
@@ -260,6 +271,7 @@ FLR_SAM_iter <- function(stk, idx, conf, par_ini, i, NA_rm, conf_full, ...) {
 ### function not exported, use FLR_SAM instead
 FLR_SAM_run <- function(stk, idx, conf = NULL,
                         conf_full = FALSE, ### use provided conf in full
+                        idx_weight = FALSE, ### supply index variance?
                         force_list_output = FALSE,
                         DoParallel = FALSE, ### compute iterations in parallel
                         par_ini = NULL, ### initial parameter values
@@ -313,7 +325,8 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
                       .packages = c("FLCore", "stockassessment")) %do_tmp% {
 
     FLR_SAM_iter(stk = stk, idx = idx, conf = conf, par_ini = par_ini, i = i,
-                 NA_rm = NA_rm, conf_full = conf_full, ...)
+                 NA_rm = NA_rm, conf_full = conf_full, idx_weight = idx_weight,
+                 ...)
 
   }
 
@@ -439,6 +452,8 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 #'   will perform iterations of stock in parallel. See Details below for
 #'   description.
 #' @param NA_rm Remove trailing years with NAs, defaults to \code{TRUE}.
+#' @param idx_weight Use index weights (index variance)? Defaults to
+#'   \code{FALSE}. If required, should be slot of \code{idx}.
 #' @param ... Additional arguments passed to \code{sam.fit()}, e.g.
 #'   \code{newtonsteps}
 #'
@@ -460,6 +475,7 @@ FLR_SAM_run <- function(stk, idx, conf = NULL,
 
 setGeneric("FLR_SAM", function(stk, idx, conf = NULL, conf_full = FALSE,
                                par_ini = NULL, DoParallel = FALSE, NA_rm = TRUE,
+                               idx_weight = FALSE,
                                ...) {
   standardGeneric("FLR_SAM")
 })
@@ -470,10 +486,11 @@ setMethod(f = "FLR_SAM",
           signature = signature(stk = "FLStock", idx = "FLIndices"),
           definition = function(stk, idx, conf = NULL, conf_full = FALSE,
                                 par_ini = NULL, DoParallel = FALSE,
-                                NA_rm = TRUE, ...) {
+                                NA_rm = TRUE, idx_weight = FALSE, ...) {
 
   FLR_SAM_run(stk = stk, idx = idx, conf = conf, conf_full = conf_full,
               DoParallel = DoParallel, par_ini = par_ini,  NA_rm = NA_rm,
+              idx_weight = idx_weight,
               ...)
 
 })
@@ -483,7 +500,7 @@ setMethod(f = "FLR_SAM",
           signature = signature(stk = "FLStock", idx = "FLIndex"),
           definition = function(stk, idx, conf = NULL, conf_full = FALSE,
                                 par_ini = NULL, DoParallel = FALSE,
-                                NA_rm = TRUE, ...) {
+                                NA_rm = TRUE, idx_weight = FALSE, ...) {
 
   ### coerce FLIndex into FLIndices
   idx <- FLIndices(idx)
@@ -491,6 +508,7 @@ setMethod(f = "FLR_SAM",
   ### run SPiCT
   FLR_SAM_run(stk = stk, idx = idx, conf = conf, conf_full = conf_full,
               DoParallel = DoParallel, par_ini = NULL,  NA_rm = NA_rm,
+              idx_weight = idx_weight,
               ...)
 
 })
