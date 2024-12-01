@@ -18,3 +18,16 @@ NULL
 ### import functions from stats
 #' @importFrom stats complete.cases plogis weighted.mean
 NULL
+
+### import functions from TMB
+#' @importFrom TMB sdreport
+NULL
+
+### import all functionality from spict
+#' @import spict
+NULL
+
+### import all functionality from stockassessment
+#' @import stockassessment
+NULL
+
