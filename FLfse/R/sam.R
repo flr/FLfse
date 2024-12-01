@@ -1508,7 +1508,7 @@ setMethod(f = "SAM_uncertainty",
   ##Resample estimated values to get N, F and q
 
   ### calculate standard deviations of model parameters
-  . <- capture.output(sds <- TMB::sdreport(obj = fit$obj,
+  . <- capture.output(sds <- sdreport(obj = fit$obj,
                                            par.fixed = fit$opt$par,
                                            getJointPrecision = TRUE))
   if (isTRUE(print_screen)) cat(paste0(., sep = "\n"))
