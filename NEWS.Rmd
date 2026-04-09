@@ -7,6 +7,14 @@ output: github_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+## Version 1.0.3
+
+Changes to `SAM_uncertainty`
+
+* Workaround when SAM models recruitment age but there is no input catch data
+
+* Added argument `proc_error_est` to turn off survival process error level
+
 ## Version 1.0.2
 
 Changes to `SAM2FLStock`
