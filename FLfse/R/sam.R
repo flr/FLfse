@@ -1485,12 +1485,24 @@ setMethod(f = "SAM_uncertainty",
          call. = FALSE)
   }
 
-    ### set random number seed?
+  ### set random number seed?
   if (!is.null(seed)) set.seed(seed)
+
+  ### stock dimensions
+  min_age <- fit$conf$minAge
+  max_age <- fit$conf$maxAge
+  ages_ac <- min_age:max_age
+  years <- fit$data$years
 
   ### index for fishing mortality ages
   idxF <- fit$conf$keyLogFsta[1, ] + 1# +dim(stk)[1]
   idxF <- idxF[idxF != 0] ### remove 0s
+
+  ### situation where first (recruitment) age class(es) exist(s) but there are not data
+  rec_age_NA <- identical(fit$conf$keyLogFsta[1], -1L)
+  if (isTRUE(rec_age_NA)) {
+    idxF <- idxF + 1
+  }
 
   ### index for F variances (usually some ages are bound)
   #idxNVar <- fit$conf$keyVarLogN
@@ -1535,10 +1547,6 @@ setMethod(f = "SAM_uncertainty",
   ### stock ####
   ### ---------------------------------------------------------------------- ###
 
-  ### stock characteristics
-  min_age <- min(fit$data$minAgePerFleet[fit$data$fleetTypes == 0])
-  max_age <- max(fit$data$maxAgePerFleet[fit$data$fleetTypes == 0])
-  years <- fit$data$years
   ### FLQuant template for stock
   stk_template <- FLQuant(dimnames = list(age = min_age:max_age, year = years,
                                           iter = 1:n))
@@ -1548,11 +1556,17 @@ setMethod(f = "SAM_uncertainty",
   stock.n[] <- exp(t(dat[, colnames(dat) == "logN"]))
 
   ### F at age
-  harvest <- stk_template
+  harvest <- stk_template %=% 0
   ### insert values for estimated ages
   harvest[unique(idxF)] <- exp(t(dat[, colnames(dat) == "logF"]))
   ### duplicate ages, if some of them are bound
-  harvest[] <- harvest[idxF]
+  if (isFALSE(rec_age_NA)) {
+    harvest[] <- harvest[idxF]
+  } else {
+    ### situation without data for recruitment age
+    harvest[-1, ] <- harvest[idxF]
+  }
+
 
   ### ---------------------------------------------------------------------- ###
   ### surveys ####
@@ -1692,11 +1706,17 @@ setMethod(f = "SAM_uncertainty",
       return(tmp$est)
 
     })
-    catch.n <- FLQuant(NA,
+    catch.n <- FLQuant(0,
                        dimnames = list(year = rownames(fit$data$catchMeanWeight),
                                        age = colnames(fit$data$catchMeanWeight),
                                        iter = seq(n)))
-    catch.n[] <- exp(res_n)
+
+    if (isFALSE(rec_age_NA)) {
+      catch.n[] <- exp(res_n)
+    } else {
+      ### situation without data for recruitment age
+      catch.n[-1, ] <- exp(res_n)
+    }
 
     ### apply catch multiplier, if used
     if (fit$conf$noScaledYears > 0) {
