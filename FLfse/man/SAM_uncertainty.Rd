@@ -12,7 +12,8 @@ SAM_uncertainty(
   print_screen = FALSE,
   seed = NULL,
   idx_cov = TRUE,
-  catch_est = TRUE
+  catch_est = TRUE,
+  proc_error_est = TRUE
 )
 
 \S4method{SAM_uncertainty}{sam}(
@@ -21,7 +22,8 @@ SAM_uncertainty(
   print_screen = FALSE,
   seed = NULL,
   idx_cov = TRUE,
-  catch_est = TRUE
+  catch_est = TRUE,
+  proc_error_est = TRUE
 )
 }
 \arguments{
@@ -36,6 +38,8 @@ SAM_uncertainty(
 \item{idx_cov}{If set to \code{TRUE}, return covariance of survey index/indices.}
 
 \item{catch_est}{If set to \code{TRUE}, return catch estimates from SAM.}
+
+\item{proc_error_est}{If set to \code{TRUE}, return (survival) process error level from SAM.}
 }
 \value{
 A list of FLQuants with the elements: stock.n, harvest, catch.n, catch_sd, survey_catchability, survey_sd, survey_cov, proc_error.

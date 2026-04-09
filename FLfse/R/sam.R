@@ -1445,6 +1445,7 @@ setMethod(f = "getpars",
 #' @param print_screen If set to \code{TRUE}, print output of \code{TMB::sdreport} to screen.
 #' @param idx_cov If set to \code{TRUE}, return covariance of survey index/indices.
 #' @param catch_est If set to \code{TRUE}, return catch estimates from SAM.
+#' @param proc_error_est If set to \code{TRUE}, return (survival) process error level from SAM.
 #' @param seed Random number seed for reproducibility.
 
 #'
@@ -1463,7 +1464,8 @@ setGeneric("SAM_uncertainty", function(fit,
                                        print_screen = FALSE,
                                        seed = NULL,
                                        idx_cov = TRUE,
-                                       catch_est = TRUE) {
+                                       catch_est = TRUE,
+                                       proc_error_est = TRUE) {
   standardGeneric("SAM_uncertainty")
 })
 
@@ -1476,7 +1478,8 @@ setMethod(f = "SAM_uncertainty",
                                 print_screen = FALSE,
                                 seed = NULL,
                                 idx_cov = TRUE,
-                                catch_est = TRUE) {
+                                catch_est = TRUE,
+                                proc_error_est = TRUE) {
 
   ### check if required package is available
   if (!requireNamespace("TMB", quietly = TRUE)) {
@@ -1670,15 +1673,23 @@ setMethod(f = "SAM_uncertainty",
   ### ---------------------------------------------------------------------- ###
   ### process error
 
-  ### get index for ages
-  idx_SdLogN <- fit$conf$keyVarLogN + 1
+  if (isTRUE(proc_error_est)) {
 
-  ### FLQuant template
-  SdLogN <- catch_sd %=% NA_integer_
+    ### get index for ages
+    idx_SdLogN <- fit$conf$keyVarLogN + 1
 
-  ### fill
-  SdLogN[] <-
-    exp(t(dat[, colnames(dat) == "logSdLogN", drop = FALSE][, idx_SdLogN]))
+    ### FLQuant template
+    SdLogN <- catch_sd %=% NA_integer_
+
+    ### fill
+    SdLogN[] <-
+      exp(t(dat[, colnames(dat) == "logSdLogN", drop = FALSE][, idx_SdLogN]))
+
+  } else {
+
+    SdLogN <- NULL
+
+  }
 
   ### ---------------------------------------------------------------------- ###
   ### get catch estimates ####
