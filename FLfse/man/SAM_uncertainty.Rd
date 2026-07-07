@@ -11,6 +11,7 @@ SAM_uncertainty(
   n = 1000,
   print_screen = FALSE,
   seed = NULL,
+  idx = TRUE,
   idx_cov = TRUE,
   catch_est = TRUE,
   proc_error_est = TRUE
@@ -21,6 +22,7 @@ SAM_uncertainty(
   n = 1000,
   print_screen = FALSE,
   seed = NULL,
+  idx = TRUE,
   idx_cov = TRUE,
   catch_est = TRUE,
   proc_error_est = TRUE
@@ -34,6 +36,8 @@ SAM_uncertainty(
 \item{print_screen}{If set to \code{TRUE}, print output of \code{TMB::sdreport} to screen.}
 
 \item{seed}{Random number seed for reproducibility.}
+
+\item{idx}{If set to \code{TRUE} (default) metrics relating to the indices are returned.}
 
 \item{idx_cov}{If set to \code{TRUE}, return covariance of survey index/indices.}
 

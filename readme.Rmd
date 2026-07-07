@@ -11,19 +11,24 @@ An R package for providing an interface between the SAM stock assessment (SAM, h
 
 The package provides methods for running SAM with FLR objects (`FLR_SAM`) and functions useful for conducting a Management Strategy Evaluation (MSE). This includes methods for turning the output of a SAM model fit into FLR's `FLStock` (`SAM2FLStock`) and for creating simulation replicates based on SAM's variance-covariance matrix (`SAM_uncertainty`).
 
-## Prerequisites
+## Installation
 
-Before installing FLfse, the following non-CRAN R packages should be installed:
+The easiest way to install FLfse is as a binary package from r-universe:
+
+```{R, eval = FALSE}
+install.packages('FLfse', repos = c('https://ices-tools-prod.r-universe.dev', 'https://cloud.r-project.org'))
+```
+
+Alternatively, FLfse can be installed from source but requires these package dependencies:
 
 * stockassessment (available from https://github.com/fishfollower/SAM)
 * FLR packages FLCore and ggplotFL (see http://www.flr-project.org/#install)
 
-## Install FLfse
-
-FLfse can be installed with
 ```{R, eval = FALSE}
 remotes::install_github("shfischer/FLfse/FLfse")
 ```
+
+
 ## Showcase functionality
 Load package
 ```{r}

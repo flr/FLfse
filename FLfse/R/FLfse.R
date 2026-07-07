@@ -8,7 +8,7 @@ NULL
 
 ### import functions from utils
 ### avoid message while fitting SAM / SPiCT
-#' @importFrom utils capture.output head
+#' @importFrom utils capture.output
 NULL
 
 ### import foreach package
@@ -16,5 +16,5 @@ NULL
 NULL
 
 ### import functions from stats
-#' @importFrom stats complete.cases plogis weighted.mean
+#' @importFrom stats complete.cases plogis
 NULL

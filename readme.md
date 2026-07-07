@@ -12,19 +12,20 @@ model fit into FLR’s `FLStock` (`SAM2FLStock`) and for creating
 simulation replicates based on SAM’s variance-covariance matrix
 (`SAM_uncertainty`).
 
-## Prerequisites
+## Installation
 
-Before installing FLfse, the following non-CRAN R packages should be
-installed:
+The easiest way to install FLfse is as a binary package from r-universe:
 
--   stockassessment (available from
-    <https://github.com/fishfollower/SAM>)
--   FLR packages FLCore and ggplotFL (see
-    <http://www.flr-project.org/#install>)
+``` r
+install.packages('FLfse', repos = c('https://ices-tools-prod.r-universe.dev', 'https://cloud.r-project.org'))
+```
 
-## Install FLfse
+Alternatively, FLfse can be installed from source but requires these
+package dependencies:
 
-FLfse can be installed with
+- stockassessment (available from <https://github.com/fishfollower/SAM>)
+- FLR packages FLCore and ggplotFL (see
+  <http://www.flr-project.org/#install>)
 
 ``` r
 remotes::install_github("shfischer/FLfse/FLfse")
@@ -90,7 +91,7 @@ tail(summary(fit))
 plot(fit)
 ```
 
-![](readme_files/figure-gfm/unnamed-chunk-5-1.png)<!-- --> The resulting
+![](readme_files/figure-gfm/unnamed-chunk-6-1.png)<!-- --> The resulting
 “sam” object can then be converted into an FLStock object:
 
 ``` r
@@ -100,7 +101,7 @@ library(ggplotFL)
 plot(cod4)
 ```
 
-![](readme_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
 #### North Sea herring
 
@@ -156,4 +157,4 @@ units(harvest(stk)) <- "f"
 plot(stk, iter = 1:10)
 ```
 
-![](readme_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+![](readme_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->

@@ -1,6 +1,13 @@
 NEWS
 ================
 
+## Version 1.0.4
+
+Changes to `SAM_uncertainty`
+
+-   Added argument `idx` so that anything related to indices can be turned off (`idx = FALSE`)
+
+
 ## Version 1.0.3
 
 Changes to `SAM_uncertainty`

@@ -916,13 +916,13 @@ sam_to_FLStock <- function(
           }
         }
         data.frame(year = unique(x$year), age = unique(x$age),
-                   lw = weighted.mean(x = x$landMeanWeight, w = x$value,
+                   lw = stats::weighted.mean(x = x$landMeanWeight, w = x$value,
                                       na.rm = TRUE),
-                   dw = weighted.mean(x = x$disMeanWeight, w = x$value,
+                   dw = stats::weighted.mean(x = x$disMeanWeight, w = x$value,
                                       na.rm = TRUE),
-                   cw = weighted.mean(x = x$catchMeanWeight, w = x$value,
+                   cw = stats::weighted.mean(x = x$catchMeanWeight, w = x$value,
                                       na.rm = TRUE),
-                   lfrac = weighted.mean(x = x$landFrac, w = x$value,
+                   lfrac = stats::weighted.mean(x = x$landFrac, w = x$value,
                                          na.rm = TRUE),
                    value = sum(x$value, na.rm = TRUE),
                    estimate = sum(x$estimate, na.rm = TRUE))
@@ -1110,7 +1110,7 @@ sam_list_to_FLStock <- function(object, uncertainty = FALSE, conf_level = 95,
   ### create template FLStock and expand iter dimension
   ### use first element which is FLStock
   ### create 1 iteration more
-  stk <- propagate(stk_iter[[head(pos_data, 1)]],
+  stk <- propagate(stk_iter[[pos_data[[1]]]],
                    iter = length(stk_iter) + 1, fill.iter = FALSE)
   ### delete first iteration
   stk <- FLCore::iter(stk, -1)
@@ -1444,6 +1444,7 @@ setMethod(f = "getpars",
 #' @param n Number of replicates
 #' @param print_screen If set to \code{TRUE}, print output of \code{TMB::sdreport} to screen.
 #' @param idx_cov If set to \code{TRUE}, return covariance of survey index/indices.
+#' @param idx If set to \code{TRUE} (default) metrics relating to the indices are returned.
 #' @param catch_est If set to \code{TRUE}, return catch estimates from SAM.
 #' @param proc_error_est If set to \code{TRUE}, return (survival) process error level from SAM.
 #' @param seed Random number seed for reproducibility.
@@ -1463,6 +1464,7 @@ setGeneric("SAM_uncertainty", function(fit,
                                        n = 1000,
                                        print_screen = FALSE,
                                        seed = NULL,
+                                       idx = TRUE,
                                        idx_cov = TRUE,
                                        catch_est = TRUE,
                                        proc_error_est = TRUE) {
@@ -1477,6 +1479,7 @@ setMethod(f = "SAM_uncertainty",
                                 n = 1000,
                                 print_screen = FALSE,
                                 seed = NULL,
+                                idx = TRUE,
                                 idx_cov = TRUE,
                                 catch_est = TRUE,
                                 proc_error_est = TRUE) {
@@ -1575,37 +1578,45 @@ setMethod(f = "SAM_uncertainty",
   ### surveys ####
   ### ---------------------------------------------------------------------- ###
 
-  ### survey specs
-  idx_surveys <- which(fit$data$fleetTypes > 0) ### which observation are surveys
-  ### age range of surveys
-  survey_ages <- lapply(seq_along(idx_surveys), function(x) {
-    seq(fit$data$minAgePerFleet[idx_surveys][x],
-        fit$data$maxAgePerFleet[idx_surveys][x])
-  })
-  ### index for estimated parameters
-  idx_LogFpar <- lapply(idx_surveys, function(x) {
-    tmp <- fit$conf$keyLogFpar[x, ] + 1
-    tmp <- tmp[tmp > 0]
-  })
+  if (isTRUE(idx)) {
 
-  sum(colnames(dat) == "logFpar") ### there are 9 parameters for cod
-  ### 5 for Q1 (ages 1-5), 4 for Q3 (ages 1-4).
-  survey_ages_idx <- split(seq(length(unlist(survey_ages))),
-                           rep(seq(survey_ages), sapply(survey_ages, length)))
+    ### survey specs
+    idx_surveys <- which(fit$data$fleetTypes > 0) ### which observation are surveys
+    ### age range of surveys
+    survey_ages <- lapply(seq_along(idx_surveys), function(x) {
+      seq(fit$data$minAgePerFleet[idx_surveys][x],
+          fit$data$maxAgePerFleet[idx_surveys][x])
+    })
+    ### index for estimated parameters
+    idx_LogFpar <- lapply(idx_surveys, function(x) {
+      tmp <- fit$conf$keyLogFpar[x, ] + 1
+      tmp <- tmp[tmp > 0]
+    })
 
-  ### get catchability at age (time-invariant) samples
-  catchability <- lapply(seq_along(idx_surveys), function(x) {
+    sum(colnames(dat) == "logFpar") ### there are 9 parameters for cod
+    ### 5 for Q1 (ages 1-5), 4 for Q3 (ages 1-4).
+    survey_ages_idx <- split(seq(length(unlist(survey_ages))),
+                             rep(seq(survey_ages), sapply(survey_ages, length)))
 
-    ### create FLQuant template
-    tmp <- FLQuant(dimnames = list(age = survey_ages[[x]],
-                                   year = "all", iter = 1:n))
-    ### fill with catchability values
-    tmp[] <-
-      exp(t(dat[, colnames(dat) == "logFpar", drop = FALSE][, idx_LogFpar[[x]]]))
+    ### get catchability at age (time-invariant) samples
+    catchability <- lapply(seq_along(idx_surveys), function(x) {
 
-    return(tmp)
+      ### create FLQuant template
+      tmp <- FLQuant(dimnames = list(age = survey_ages[[x]],
+                                     year = "all", iter = 1:n))
+      ### fill with catchability values
+      tmp[] <-
+        exp(t(dat[, colnames(dat) == "logFpar", drop = FALSE][, idx_LogFpar[[x]]]))
 
-  })
+      return(tmp)
+
+    })
+
+  } else {
+
+    catchability <- NULL
+
+  }
 
   ### ---------------------------------------------------------------------- ###
   ### standard deviation - catch ####
@@ -1631,28 +1642,36 @@ setMethod(f = "SAM_uncertainty",
   ### ---------------------------------------------------------------------- ###
   ### time-invariant
 
-  ### get catchability at age (time-invariant) samples
-  survey_sd <- lapply(seq_along(idx_surveys), function(x) {
+  if (isTRUE(idx)) {
 
-    ### create FLQuant template
-    tmp <- FLQuant(dimnames = list(age = survey_ages[[x]],
-                                   year = "all", iter = 1:n))
-    ### index for sd (some ages are linked)
-    idx_sd <- idxObs[idx_surveys[x], ]
-    idx_sd <- idx_sd[idx_sd > -1] + 1
+    ### get catchability at age (time-invariant) samples
+    survey_sd <- lapply(seq_along(idx_surveys), function(x) {
 
-    ### fill with catchability values
-    tmp[] <- exp(t(dat[, colnames(dat) == "logSdLogObs", drop = FALSE][, idx_sd]))
+      ### create FLQuant template
+      tmp <- FLQuant(dimnames = list(age = survey_ages[[x]],
+                                     year = "all", iter = 1:n))
+      ### index for sd (some ages are linked)
+      idx_sd <- idxObs[idx_surveys[x], ]
+      idx_sd <- idx_sd[idx_sd > -1] + 1
 
-    return(tmp)
+      ### fill with catchability values
+      tmp[] <- exp(t(dat[, colnames(dat) == "logSdLogObs", drop = FALSE][, idx_sd]))
 
-  })
+      return(tmp)
+
+    })
+
+  } else {
+
+    survey_sd <- NULL
+
+  }
 
   ### ---------------------------------------------------------------------- ###
   ### surveys - get covariance ####
   ### ---------------------------------------------------------------------- ###
 
-  if (isTRUE(idx_cov)) {
+  if (isTRUE(idx_cov) & isTRUE(idx)) {
     . <- capture.output(survey_cov <- foreach(iter_i = 1:n) %do% {
 
       fit$obj$fn(sim.states[iter_i, 1:length(sds$par.fixed)])
